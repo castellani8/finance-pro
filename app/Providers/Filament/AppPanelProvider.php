@@ -36,7 +36,9 @@ class AppPanelProvider extends PanelProvider
             ->login()
             ->registration(Register::class)
             ->emailVerification()
-            ->profile(EditProfile::class)
+            // isSimple: false renderiza o perfil como página completa do
+            // painel (com sidebar), em vez do modal simples padrão.
+            ->profile(EditProfile::class, isSimple: false)
             ->databaseNotifications()
             ->brandName('Milia Invest')
             ->brandLogo(asset('images/logo.svg'))

@@ -5,26 +5,53 @@ namespace App\Filament\Auth;
 use App\Filament\Auth\Concerns\HasPhoneFormComponents;
 use App\Support\PhoneCountry;
 use Filament\Auth\Pages\EditProfile as BaseEditProfile;
+use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use SensitiveParameter;
 
 /**
- * Perfil com edição do celular (DDI + número), mantendo E.164 em users.phone.
+ * Tela "Meu perfil": dados pessoais (nome e celular, mantendo E.164 em
+ * users.phone) e troca de senha. E-mail é exibido mas não editável por
+ * enquanto — mudá-lo exigiria reverificação.
  */
 class EditProfile extends BaseEditProfile
 {
     use HasPhoneFormComponents;
 
+    public function getTitle(): string
+    {
+        return 'Meu perfil';
+    }
+
     public function form(Schema $schema): Schema
     {
         return $schema
+            ->inlineLabel(false)
             ->components([
-                $this->getNameFormComponent(),
-                $this->getEmailFormComponent(),
-                $this->getPhoneFormComponent(),
-                $this->getPasswordFormComponent(),
-                $this->getPasswordConfirmationFormComponent(),
-                $this->getCurrentPasswordFormComponent(),
+                Section::make('Dados pessoais')
+                    ->description('Como você aparece na Milia Invest e onde te avisamos sobre a sua carteira.')
+                    ->icon(Heroicon::OutlinedUserCircle)
+                    ->aside()
+                    ->schema([
+                        $this->getNameFormComponent()->label('Nome'),
+                        TextInput::make('email')
+                            ->label('E-mail')
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->belowContent('A alteração de e-mail ainda não está disponível.'),
+                        $this->getPhoneFormComponent(),
+                    ]),
+                Section::make('Alterar senha')
+                    ->description('Deixe em branco para manter a senha atual. Ao definir uma nova senha, confirme também a senha atual.')
+                    ->icon(Heroicon::OutlinedLockClosed)
+                    ->aside()
+                    ->schema([
+                        $this->getPasswordFormComponent()->label('Nova senha'),
+                        $this->getPasswordConfirmationFormComponent()->label('Confirmar nova senha'),
+                        $this->getCurrentPasswordFormComponent()->label('Senha atual'),
+                    ]),
             ]);
     }
 
