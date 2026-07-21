@@ -32,6 +32,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('asset_price_histories');
+        Schema::dropIfExists('asset_price_history');
     }
 };

@@ -35,18 +35,49 @@ class IndexAccumulator
         float $indexPercent = 100.0,
         float $spreadAnnual = 0.0,
     ): float {
+        return $this->factorBetween($indexCode, $fromDate, now()->toDateString(), $indexPercent, $spreadAnnual);
+    }
+
+    /**
+     * Fator de correção entre $fromDate (exclusivo) e $toDate (inclusivo),
+     * usando os registros da série disponíveis dentro do intervalo.
+     */
+    public function factorBetween(
+        string $indexCode,
+        string $fromDate,
+        string $toDate,
+        float $indexPercent = 100.0,
+        float $spreadAnnual = 0.0,
+    ): float {
         $indexCode = strtoupper($indexCode);
 
         if ($indexCode === 'PREFIXADO' || $indexCode === '') {
-            return $this->spreadFactor($spreadAnnual, $fromDate, now()->toDateString());
+            return $this->spreadFactor($spreadAnnual, $fromDate, $toDate);
         }
 
         $series = $this->series($indexCode, $indexPercent);
 
         if ($series === null || $series['latest'] <= 0) {
-            return $this->spreadFactor($spreadAnnual, $fromDate, now()->toDateString());
+            return $this->spreadFactor($spreadAnnual, $fromDate, $toDate);
         }
 
+        $base = $this->cumulativeAt($series, $fromDate);
+        $target = $this->cumulativeAt($series, $toDate);
+        $indexFactor = $base > 0 ? $target / $base : 1.0;
+
+        // O spread capitaliza até onde a série alcança (não projeta o futuro).
+        $spreadUntil = min($toDate, $series['lastDate']);
+
+        return $indexFactor * $this->spreadFactor($spreadAnnual, $fromDate, $spreadUntil);
+    }
+
+    /**
+     * Fator acumulado da série no último registro com data <= $date (1.0 antes do início).
+     *
+     * @param  array{dates: array<int, string>, cum: array<int, float>, latest: float, lastDate: string}  $series
+     */
+    private function cumulativeAt(array $series, string $date): float
+    {
         $dates = $series['dates'];
         $cum = $series['cum'];
 
@@ -57,7 +88,7 @@ class IndexAccumulator
         while ($lo <= $hi) {
             $mid = intdiv($lo + $hi, 2);
 
-            if ($dates[$mid] <= $fromDate) {
+            if ($dates[$mid] <= $date) {
                 $pos = $mid;
                 $lo = $mid + 1;
             } else {
@@ -65,10 +96,7 @@ class IndexAccumulator
             }
         }
 
-        $base = $pos >= 0 ? $cum[$pos] : 1.0;
-        $indexFactor = $base > 0 ? $series['latest'] / $base : 1.0;
-
-        return $indexFactor * $this->spreadFactor($spreadAnnual, $fromDate, $series['lastDate']);
+        return $pos >= 0 ? $cum[$pos] : 1.0;
     }
 
     /** Fator do spread anual capitalizado no período (ex: +5% a.a.). */
@@ -92,7 +120,7 @@ class IndexAccumulator
      */
     private function series(string $indexCode, float $indexPercent): ?array
     {
-        $key = $indexCode . '|' . $indexPercent;
+        $key = $indexCode.'|'.$indexPercent;
 
         if (array_key_exists($key, self::$cache)) {
             return self::$cache[$key];

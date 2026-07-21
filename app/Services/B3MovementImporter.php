@@ -29,13 +29,26 @@ class B3MovementImporter
     ];
 
     private int $assetsCreated = 0;
+
     private int $assetsUpdated = 0;
+
     private int $transactionsCreated = 0;
+
     private int $transactionsUpdated = 0;
+
     private int $skipped = 0;
 
     /** @var array<string, Asset> Cache dos ativos já resolvidos nesta importação. */
     private array $assetCache = [];
+
+    /**
+     * Contador de ocorrências de linhas idênticas dentro do arquivo, para que
+     * duas operações legitimamente iguais (mesmo dia/ativo/quantidade/preço)
+     * não colidam no mesmo external_hash e uma sobrescreva a outra.
+     *
+     * @var array<string, int>
+     */
+    private array $rowOccurrences = [];
 
     /**
      * @return array{assets_created:int,assets_updated:int,transactions_created:int,transactions_updated:int,skipped:int}
@@ -45,6 +58,7 @@ class B3MovementImporter
         $rows = $this->readRows($path);
         $header = array_shift($rows);
         $columns = $this->mapColumns($header);
+        $this->rowOccurrences = [];
 
         DB::transaction(function () use ($rows, $columns, $tenant) {
             foreach ($rows as $row) {
@@ -143,7 +157,7 @@ class B3MovementImporter
 
         $asset = $this->upsertAsset($tenant, $assetType, $code, $name);
 
-        $externalHash = sha1(implode('|', [
+        $hashBase = implode('|', [
             $tenant->getKey(),
             $date->toDateString(),
             $movement,
@@ -152,7 +166,12 @@ class B3MovementImporter
             (string) ($unitPrice ?? ''),
             (string) $total,
             $direction,
-        ]));
+        ]);
+
+        // A 1ª ocorrência mantém o hash sem sufixo para continuar casando com
+        // registros importados por versões anteriores.
+        $occurrence = $this->rowOccurrences[$hashBase] = ($this->rowOccurrences[$hashBase] ?? 0) + 1;
+        $externalHash = sha1($occurrence === 1 ? $hashBase : "{$hashBase}|{$occurrence}");
 
         $transaction = Transaction::updateOrCreate(
             [
@@ -292,12 +311,19 @@ class B3MovementImporter
             str_contains($m, 'DIVIDENDO') => 'DIVIDEND',
             str_contains($m, 'JUROS SOBRE CAPITAL') => 'JCP',
             str_contains($m, 'PAGAMENTO DE JUROS') => 'INTEREST',
+            str_contains($m, 'AMORTIZACAO') => 'AMORTIZATION',
             str_contains($m, 'RENDIMENTO') => 'INCOME',
             str_contains($m, 'BONIFICACAO'), str_contains($m, 'FRACAO EM ATIVOS') => 'BONUS',
-            str_contains($m, 'LEILAO DE FRACAO') => 'SELL',
+            // Crédito em dinheiro pela fração vendida em leilão (a fração em si
+            // já saiu da posição no débito "Fração em Ativos").
+            str_contains($m, 'LEILAO DE FRACAO') => 'FRACTION_AUCTION',
             str_contains($m, 'SUBSCRICAO') => 'SUBSCRIPTION',
             str_contains($m, 'CESSAO DE DIREITOS') => 'RIGHTS_CESSION',
-            str_contains($m, 'GRUPAMENTO'), str_contains($m, 'DESDOBR') => 'GROUPING',
+            // Grupamento: a B3 credita o NOVO TOTAL da posição (sem debitar as
+            // ações antigas), então o tipo tem semântica de "reset".
+            str_contains($m, 'GRUPAMENTO') => 'GROUPING',
+            // Desdobramento: crédito das ações adicionais (delta).
+            str_contains($m, 'DESDOBR') => 'SPLIT',
             str_contains($m, 'ATUALIZACAO') => 'UPDATE',
             str_contains($m, 'BLOQUEIO') => 'CUSTODY_BLOCK',
             str_contains($m, 'VENCIMENTO'), str_contains($m, 'RESGATE'), str_contains($m, 'RETIRADA') => 'SELL',

@@ -34,12 +34,12 @@ class AssetsPortfolioOverview extends StatsOverviewWidget
                 ->color('gray'),
 
             Stat::make('Valor atual (bruto)', $this->money($current))
-                ->description($this->signedPercent($pct) . ' sem proventos')
+                ->description($this->signedPercent($pct).' sem proventos')
                 ->descriptionIcon($pct >= 0 ? 'heroicon-m-arrow-trending-up' : 'heroicon-m-arrow-trending-down')
                 ->color($pct >= 0 ? 'success' : 'danger'),
 
             Stat::make('Proventos recebidos', $this->money($dividends))
-                ->description($this->signedPercent($pctWithDividends) . ' com proventos')
+                ->description($this->signedPercent($pctWithDividends).' com proventos')
                 ->descriptionIcon($pctWithDividends >= 0 ? 'heroicon-m-arrow-trending-up' : 'heroicon-m-arrow-trending-down')
                 ->color($pctWithDividends >= 0 ? 'success' : 'danger'),
         ];
@@ -47,7 +47,7 @@ class AssetsPortfolioOverview extends StatsOverviewWidget
 
     private function money(float $value): string
     {
-        return 'R$ ' . number_format($value, 2, ',', '.');
+        return 'R$ '.number_format($value, 2, ',', '.');
     }
 
     private function signedPercent(float $value): string

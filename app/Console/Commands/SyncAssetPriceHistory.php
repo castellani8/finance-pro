@@ -62,7 +62,7 @@ class SyncAssetPriceHistory extends Command
                     'chart.result.0'
                 );
 
-                if (!$result) {
+                if (! $result) {
 
                     $this->newLine();
                     $this->warn("Sem dados para {$ticker}");
@@ -76,20 +76,20 @@ class SyncAssetPriceHistory extends Command
 
                 $quote = data_get($result, 'indicators.quote.0', []);
 
-                $opens  = $quote['open']  ?? [];
+                $opens = $quote['open'] ?? [];
                 $closes = $quote['close'] ?? [];
-                $highs  = $quote['high']  ?? [];
-                $lows   = $quote['low']   ?? [];
+                $highs = $quote['high'] ?? [];
+                $lows = $quote['low'] ?? [];
 
                 $rows = [];
 
                 foreach ($timestamps as $i => $timestamp) {
 
                     if (
-                        !isset($opens[$i]) ||
-                        !isset($highs[$i]) ||
-                        !isset($lows[$i]) ||
-                        !isset($closes[$i])
+                        ! isset($opens[$i]) ||
+                        ! isset($highs[$i]) ||
+                        ! isset($lows[$i]) ||
+                        ! isset($closes[$i])
                     ) {
                         continue;
                     }
@@ -125,7 +125,7 @@ class SyncAssetPriceHistory extends Command
                     ]
                 );
 
-                $this->line(" ✔ {$ticker} (" . count($rows) . " registros)");
+                $this->line(" ✔ {$ticker} (".count($rows).' registros)');
 
             } catch (\Throwable $e) {
 

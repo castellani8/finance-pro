@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Assets;
 use App\Filament\Resources\Assets\Pages\CreateAsset;
 use App\Filament\Resources\Assets\Pages\EditAsset;
 use App\Filament\Resources\Assets\Pages\ListAssets;
+use App\Filament\Resources\Assets\RelationManagers\TransactionsRelationManager;
 use App\Filament\Resources\Assets\Schemas\AssetForm;
 use App\Filament\Resources\Assets\Tables\AssetsTable;
 use App\Models\Asset;
@@ -35,17 +36,18 @@ class AssetResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            TransactionsRelationManager::class,
         ];
     }
 
     public static function getEloquentQuery(): Builder
     {
+        // A ordenação padrão fica na tabela (defaultSort): um orderBy fixo aqui
+        // viria antes de qualquer ordenação escolhida pelo usuário e a anularia.
         return parent::getEloquentQuery()
             ->where('tenant_id', Filament::getTenant()->id)
             ->wherePositionPositive()
-            ->with('transactions')
-            ->orderBy('name');
+            ->with('transactions');
     }
 
     public static function getPages(): array

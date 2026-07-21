@@ -15,14 +15,17 @@ class SyncMarketingIndexSeries extends Command
     protected $description = 'Sincroniza os principais índices econômicos do SGS (Banco Central)';
 
     /**
-     * Código SGS => Nome do índice
+     * Código SGS => Nome do índice.
+     *
+     * Só entram séries que são TAXAS do período (% ao dia para SELIC/CDI,
+     * % ao mês para IPCA/IGP-M), pois o IndexAccumulator compõe registro a
+     * registro. Séries de pontos/nível (ex: IBOV) não pertencem a esta tabela.
      */
     private const INDICES = [
-        11   => 'SELIC',
-        12   => 'CDI',
-        433  => 'IPCA',
-        189  => 'IGP-M',
-        7832 => 'IBOV',
+        11 => 'SELIC',
+        12 => 'CDI',
+        433 => 'IPCA',
+        189 => 'IGP-M',
     ];
 
     public function handle(): int
@@ -46,9 +49,9 @@ class SyncMarketingIndexSeries extends Command
                     ->get(
                         "https://api.bcb.gov.br/dados/serie/bcdata.sgs.{$seriesCode}/dados",
                         [
-                            'formato'     => 'json',
+                            'formato' => 'json',
                             'dataInicial' => $start,
-                            'dataFinal'   => $end,
+                            'dataFinal' => $end,
                         ]
                     );
 
@@ -71,9 +74,9 @@ class SyncMarketingIndexSeries extends Command
                         'index_code' => $indexCode,
                         'date' => Carbon::createFromFormat('d/m/Y', $item['data'])->toDateString(),
 
-                        // enquanto sua tabela possui apenas estes campos
+                        // Taxa do período em % (dia para SELIC/CDI, mês para IPCA/IGP-M).
                         'daily_factor' => $value,
-                        'annual_rate' => $value,
+                        'annual_rate' => null,
 
                         'created_at' => now(),
                         'updated_at' => now(),
@@ -88,7 +91,7 @@ class SyncMarketingIndexSeries extends Command
                     );
                 }
 
-                $this->line(" ✔ {$indexCode} (" . count($rows) . " registros)");
+                $this->line(" ✔ {$indexCode} (".count($rows).' registros)');
 
                 // evita bombardear a API
                 usleep(250000);
