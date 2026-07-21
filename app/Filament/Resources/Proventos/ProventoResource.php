@@ -117,6 +117,15 @@ class ProventoResource extends Resource
                         ->locale('pt_BR')
                         ->translatedFormat('F \d\e Y'))
                     ->getKeyFromRecordUsing(fn (Transaction $record): string => $record->transaction_date->format('Y-m'))
+                    // A chave do grupo é "Y-m"; sem isto o Filament compararia
+                    // transaction_date = '2026-07', que o PostgreSQL rejeita.
+                    ->scopeQueryByKeyUsing(fn (Builder $query, string $key): Builder => $query->whereBetween(
+                        'transaction_date',
+                        [
+                            $key.'-01',
+                            \Carbon\CarbonImmutable::createFromFormat('!Y-m', $key)->endOfMonth()->toDateString(),
+                        ],
+                    ))
                     ->orderQueryUsing(fn (Builder $query, string $direction): Builder => $query->orderBy('transaction_date', 'desc'))
             )
             ->groupingSettingsHidden()

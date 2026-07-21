@@ -39,7 +39,8 @@ class RelatorioIr extends Page
     {
         return Transaction::query()
             ->where('tenant_id', Filament::getTenant()->getKey())
-            ->selectRaw('distinct substr(transaction_date, 1, 4) as year')
+            // cast p/ text: no PostgreSQL substr() não aceita coluna date.
+            ->selectRaw('distinct substr(cast(transaction_date as text), 1, 4) as year')
             ->orderByDesc('year')
             ->pluck('year')
             ->map(fn ($y): int => (int) $y)
