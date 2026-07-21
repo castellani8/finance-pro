@@ -13,7 +13,7 @@ return [
     */
 
     'contact' => [
-        'email' => env('LANDING_CONTACT_EMAIL', 'contato@miliainvest.com.br'),
+        'email' => env('LANDING_CONTACT_EMAIL', 'contato@miliainvest.com'),
         'whatsapp' => env('LANDING_CONTACT_WHATSAPP', '(11) 99999-9999'),
         'whatsapp_url' => env('LANDING_CONTACT_WHATSAPP_URL', 'https://wa.me/5511999999999'),
         'instagram_url' => env('LANDING_SOCIAL_INSTAGRAM'),

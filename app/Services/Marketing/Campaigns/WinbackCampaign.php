@@ -29,9 +29,10 @@ class WinbackCampaign extends Campaign
     /** Janela larga (duas semanas) — inatividade é o critério que manda. */
     public function isDue(User $user, CarbonInterface $now): bool
     {
-        $days = (int) $user->created_at->startOfDay()->diffInDays($now->copy()->startOfDay());
+        $days = $this->daysSinceSignup($user, $now);
 
-        return $days >= $this->dueDay()
+        return $days !== null
+            && $days >= $this->dueDay()
             && $days <= $this->dueDay() + 14
             && $this->appliesTo($user);
     }

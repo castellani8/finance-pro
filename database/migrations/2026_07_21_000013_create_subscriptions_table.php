@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -36,7 +37,7 @@ return new class extends Migration
             DB::table('subscriptions')->insert([
                 'user_id' => $user->id,
                 'status' => 'trialing',
-                'trial_ends_at' => \Illuminate\Support\Carbon::parse($user->created_at)->addDays($trialDays),
+                'trial_ends_at' => Carbon::parse($user->created_at)->addDays($trialDays),
                 'price' => $price,
                 'created_at' => $now,
                 'updated_at' => $now,

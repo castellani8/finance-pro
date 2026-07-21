@@ -5,6 +5,7 @@ namespace App\Providers\Filament;
 use App\Filament\Auth\EditProfile;
 use App\Filament\Auth\Register;
 use App\Filament\Pages\Tenancy\RegisterTenant;
+use App\Http\Middleware\EnsureSubscriptionIsActive;
 use App\Models\Tenant;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -72,7 +73,7 @@ class AppPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-                \App\Http\Middleware\EnsureSubscriptionIsActive::class,
+                EnsureSubscriptionIsActive::class,
             ]);
     }
 }

@@ -61,11 +61,24 @@ abstract class Campaign
      */
     public function isDue(User $user, CarbonInterface $now): bool
     {
-        $days = (int) $user->created_at->startOfDay()->diffInDays($now->copy()->startOfDay());
+        $days = $this->daysSinceSignup($user, $now);
 
-        return $days >= $this->dueDay()
+        return $days !== null
+            && $days >= $this->dueDay()
             && $days <= $this->dueDay() + (int) config('marketing.grace_days')
             && $this->appliesTo($user);
+    }
+
+    /** Dias desde o cadastro; null quando não dá para determinar (conta legada). */
+    protected function daysSinceSignup(User $user, CarbonInterface $now): ?int
+    {
+        $signedUpAt = $user->created_at ?? $user->subscription?->created_at;
+
+        if ($signedUpAt === null) {
+            return null;
+        }
+
+        return (int) $signedUpAt->copy()->startOfDay()->diffInDays($now->copy()->startOfDay());
     }
 
     protected function firstName(User $user): string
