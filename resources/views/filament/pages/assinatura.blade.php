@@ -30,8 +30,19 @@
                         </div>
                     @elseif ($subscription->current_period_ends_at !== null)
                         <div>
-                            <div style="font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: rgb(113 113 122); margin-bottom: .35rem">Período atual até</div>
+                            <div style="font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: rgb(113 113 122); margin-bottom: .35rem">
+                                {{ $status === \App\Enums\SubscriptionStatus::Canceled ? 'Acesso até' : 'Período atual até' }}
+                            </div>
                             <div style="font-size: 1.35rem; font-weight: 700">{{ $subscription->current_period_ends_at->format('d/m/Y') }}</div>
+                        </div>
+                    @endif
+
+                    @if ($subscription->billing_type !== null)
+                        <div>
+                            <div style="font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: rgb(113 113 122); margin-bottom: .35rem">Pagamento</div>
+                            <div style="font-size: 1.05rem; font-weight: 600">
+                                {{ \App\Services\Payments\Enums\BillingType::tryFrom($subscription->billing_type)?->label() ?? $subscription->billing_type }}
+                            </div>
                         </div>
                     @endif
                 </div>
@@ -41,12 +52,20 @@
                         Seu acesso ao painel está pausado. Assine para continuar acompanhando seu patrimônio — todos os seus dados estão guardados.
                     </div>
                 @endunless
+
+                @if ($subscription->latest_invoice_url && ! in_array($status, [\App\Enums\SubscriptionStatus::Active, \App\Enums\SubscriptionStatus::Canceled], true))
+                    <div style="margin-top: 1rem">
+                        <x-filament::button tag="a" href="{{ $subscription->latest_invoice_url }}" target="_blank" color="warning" icon="heroicon-o-banknotes">
+                            Abrir fatura em aberto
+                        </x-filament::button>
+                    </div>
+                @endif
             @endif
         </x-filament::section>
 
         {{-- Plano --}}
         <x-filament::section>
-            <x-slot name="heading">Plano único — Milia Invest completo</x-slot>
+            <x-slot name="heading">Plano único — {{ $this->getPlan()->name }}</x-slot>
 
             <div style="display: flex; align-items: baseline; gap: .35rem; margin-bottom: 1rem">
                 <span style="font-size: 1rem; color: rgb(113 113 122)">R$</span>
@@ -62,14 +81,17 @@
                 @endforeach
             </ul>
 
-            <x-filament::button color="primary" size="lg" disabled title="Pagamento online em breve">
-                Assinar agora
-            </x-filament::button>
-            <p style="margin-top: .75rem; font-size: .8125rem; color: rgb(113 113 122)">
-                O pagamento online (Pix, boleto e cartão) está chegando. Enquanto isso, fale com a gente em
-                <a href="mailto:{{ config('landing.contact.email') }}" style="color: #D4AF37; text-decoration: underline">{{ config('landing.contact.email') }}</a>
-                para ativar sua assinatura.
-            </p>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 1rem">
+                {{ $this->subscribeAction }}
+                {{ $this->cancelAction }}
+            </div>
+
+            @if ($this->canSubscribe())
+                <p style="margin-top: .75rem; font-size: .8125rem; color: rgb(113 113 122)">
+                    Pagamento processado com segurança pelo Asaas — PIX, boleto ou cartão de crédito.
+                    Dúvidas? <a href="mailto:{{ config('landing.contact.email') }}" style="color: #D4AF37; text-decoration: underline">{{ config('landing.contact.email') }}</a>
+                </p>
+            @endif
         </x-filament::section>
     </div>
 </x-filament-panels::page>

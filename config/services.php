@@ -44,4 +44,12 @@ return [
         'mail' => env('NOTIFY_BY_EMAIL', false),
     ],
 
+    'asaas' => [
+        'access_token' => env('ASAAS_ACCESS_TOKEN'),
+        // Produção: https://api.asaas.com/v3
+        'base_url' => env('ASAAS_BASE_URL', 'https://api-sandbox.asaas.com/v3'),
+        // Token configurado no painel do Asaas e conferido no header asaas-access-token dos webhooks.
+        'webhook_auth_token' => env('ASAAS_WEBHOOK_AUTH_TOKEN'),
+    ],
+
 ];

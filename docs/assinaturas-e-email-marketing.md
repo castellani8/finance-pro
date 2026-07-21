@@ -17,7 +17,22 @@ cadastro ──> trialing ──(trial vence)──> expired
 - Acesso ao painel: `User::hasPanelAccess()` → middleware `EnsureSubscriptionIsActive` (authMiddleware do panel). Sem acesso, o usuário só navega para **Assinatura**, perfil e logout; o resto redireciona para a página de assinatura.
 - Página Filament **Assinatura** (`/app/{tenant}/assinatura`): status, dias restantes, plano e CTA de assinar (placeholder até o Asaas).
 
-**Preparado para o Asaas**: campos `asaas_customer_id` e `asaas_subscription_id` já existem. A integração futura deve: criar cliente+assinatura no Asaas no clique de "Assinar agora", e nos webhooks (`PAYMENT_CONFIRMED`, `PAYMENT_OVERDUE`, `SUBSCRIPTION_DELETED`…) atualizar `status`/`current_period_ends_at`.
+### Pagamento (Asaas)
+
+A cobrança é feita pelo **Asaas** via camada agnóstica de gateway (`app/Services/Payments`, driver em `Gateways/AsaasGateway.php` sobre o client `app/Services/Asaas`):
+
+- **Assinar**: página **Assinatura** → modal com PIX, boleto ou cartão (checkout transparente). Cartão ativa na hora; PIX/boleto redirecionam para a fatura e o acesso é liberado quando o webhook confirmar. `subscriptions` guarda `gateway`, `billing_type`, `asaas_customer_id`, `asaas_subscription_id` e `latest_invoice_url`.
+- **Webhooks**: `POST /webhooks/{gateway}` (CSRF isento), autenticado pelo header `asaas-access-token` contra `ASAAS_WEBHOOK_AUTH_TOKEN`. Cada evento vira uma linha em `webhook_logs` e é processado async por `ProcessSubscriptionWebhookJob` (idempotente, com lock): `PAYMENT_CONFIRMED` ativa e soma um ciclo ao período pago; `PAYMENT_OVERDUE` → past_due (acesso mantido em carência); `PAYMENT_REFUNDED` → expired; `SUBSCRIPTION_DELETED` → canceled com acesso até o fim do período pago. O usuário é notificado no sino do painel.
+- **Cancelar**: botão na página Assinatura chama o gateway e aplica a mesma regra de carência.
+- **Env**: `ASAAS_ACCESS_TOKEN`, `ASAAS_BASE_URL` (sandbox por padrão; produção `https://api.asaas.com/v3`), `ASAAS_WEBHOOK_AUTH_TOKEN`, `SUBSCRIPTION_GATEWAY=asaas`. Planos em `config/subscription.php` (preço acompanha `LANDING_PLAN_PRICE`).
+
+### Verificação de e-mail
+
+Novos cadastros precisam confirmar o e-mail (`User` implementa `MustVerifyEmail` + `->emailVerification()` no panel). Contas anteriores à exigência foram marcadas como verificadas na migration.
+
+### Log de e-mails (email_logs)
+
+Todo e-mail que sai da aplicação é registrado em `email_logs` pelo listener `LogOutgoingEmail` (evento `MessageSending`): remetente, destinatário, usuário, tag (header `X-Email-Tag`), assunto, HTML e abertura (`read_at`, via pixel assinado `/email/pixel/{id}`). Para enviar uma **Notification** com tag e log garantidos, use `App\Utils\EmailLogger` (`EmailLogger::make($notification, $user)->tag('...')->log()`) — envios dele carregam `X-Email-Log-Id` e não são duplicados pelo listener.
 
 ## Funil de e-mail marketing
 

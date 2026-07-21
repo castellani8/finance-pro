@@ -35,6 +35,7 @@ class AppPanelProvider extends PanelProvider
             ->path('app')
             ->login()
             ->registration(Register::class)
+            ->emailVerification()
             ->profile(EditProfile::class)
             ->databaseNotifications()
             ->brandName('Milia Invest')
