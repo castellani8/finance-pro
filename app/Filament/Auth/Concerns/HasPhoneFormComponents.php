@@ -27,7 +27,7 @@ trait HasPhoneFormComponents
                     ->searchable()
                     ->native(false)
                     ->required()
-                    ->columnSpan(2),
+                    ->columnSpan(['default' => 2]),
                 TextInput::make('phone_number')
                     ->label('Celular')
                     ->tel()
@@ -54,7 +54,7 @@ trait HasPhoneFormComponents
                         }
                     })
                     ->validationAttribute('celular')
-                    ->columnSpan(3),
+                    ->columnSpan(['default' => 3]),
             ]);
     }
 }

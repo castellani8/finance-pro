@@ -2,6 +2,8 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Auth\EditProfile;
+use App\Filament\Auth\Register;
 use App\Filament\Pages\Tenancy\RegisterTenant;
 use App\Models\Tenant;
 use Filament\Http\Middleware\Authenticate;
@@ -31,8 +33,8 @@ class AppPanelProvider extends PanelProvider
             ->id('app')
             ->path('app')
             ->login()
-            ->registration()
-            ->profile()
+            ->registration(Register::class)
+            ->profile(EditProfile::class)
             ->databaseNotifications()
             ->brandName('Milia Invest')
             ->brandLogo(asset('images/logo.svg'))
