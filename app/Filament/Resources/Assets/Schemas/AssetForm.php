@@ -2,9 +2,9 @@
 
 namespace App\Filament\Resources\Assets\Schemas;
 
-use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 
 class AssetForm
@@ -19,6 +19,7 @@ class AssetForm
                 Select::make('type')
                     ->label('Tipo')
                     ->required()
+                    ->live()
                     ->options([
                         'STOCK' => 'Ação',
                         'FII' => 'Fundo Imobiliário',
@@ -36,9 +37,31 @@ class AssetForm
                 Select::make('company_id')
                     ->label('Empresa')
                     ->relationship('company', 'name'),
-                KeyValue::make('metadata')
-                    ->label('Metadados')
-                    ->columnSpanFull(),
+                Select::make('metadata.indexer')
+                    ->label('Indexador')
+                    ->live()
+                    ->options([
+                        'CDI' => 'CDI',
+                        'IPCA' => 'IPCA',
+                        'SELIC' => 'SELIC',
+                        'PREFIXADO' => 'Prefixado',
+                    ])
+                    ->default('CDI')
+                    ->visible(fn (Get $get): bool => $get('type') === 'FIXED_INCOME'),
+                TextInput::make('metadata.index_percent')
+                    ->label('% do índice')
+                    ->helperText('Ex: 100 para 100% do CDI, 110 para 110% do CDI.')
+                    ->numeric()
+                    ->suffix('%')
+                    ->default(100)
+                    ->visible(fn (Get $get): bool => $get('type') === 'FIXED_INCOME' && $get('metadata.indexer') !== 'PREFIXADO'),
+                TextInput::make('metadata.spread')
+                    ->label(fn (Get $get): string => $get('metadata.indexer') === 'PREFIXADO' ? 'Taxa (a.a.)' : 'Spread (+ a.a.)')
+                    ->helperText('Ex: 4 para "CDI + 4%" / "IPCA + 4%", ou a taxa do prefixado.')
+                    ->numeric()
+                    ->suffix('% a.a.')
+                    ->default(0)
+                    ->visible(fn (Get $get): bool => $get('type') === 'FIXED_INCOME'),
             ]);
     }
 }

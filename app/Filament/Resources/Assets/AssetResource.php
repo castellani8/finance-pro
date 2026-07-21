@@ -9,10 +9,12 @@ use App\Filament\Resources\Assets\Schemas\AssetForm;
 use App\Filament\Resources\Assets\Tables\AssetsTable;
 use App\Models\Asset;
 use BackedEnum;
+use Filament\Facades\Filament;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class AssetResource extends Resource
 {
@@ -35,6 +37,15 @@ class AssetResource extends Resource
         return [
             //
         ];
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->where('tenant_id', Filament::getTenant()->id)
+            ->wherePositionPositive()
+            ->with('transactions')
+            ->orderBy('name');
     }
 
     public static function getPages(): array

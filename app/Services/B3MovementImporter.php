@@ -190,13 +190,26 @@ class B3MovementImporter
             ? ['tenant_id' => $tenant->getKey(), 'ticker_or_code' => $code]
             : ['tenant_id' => $tenant->getKey(), 'name' => $name, 'type' => $type];
 
-        $asset = Asset::updateOrCreate($lookup, [
+        $asset = Asset::firstOrNew($lookup);
+        $asset->fill([
             'name' => $name,
             'type' => $type,
             'ticker_or_code' => $code,
         ]);
 
-        $asset->wasRecentlyCreated
+        // Guarda o indexador inferido da renda fixa sem sobrescrever ajustes manuais.
+        if ($type === 'FIXED_INCOME' && empty($asset->metadata['indexer'] ?? null)) {
+            $asset->metadata = array_merge($asset->metadata ?? [], [
+                'indexer' => Asset::inferIndexer($name),
+                'index_percent' => 100,
+                'spread' => 0,
+            ]);
+        }
+
+        $wasCreated = ! $asset->exists;
+        $asset->save();
+
+        $wasCreated
             ? $this->assetsCreated++
             : $this->assetsUpdated++;
 

@@ -8,19 +8,19 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 
 class AssetsTable
 {
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with('transactions'))
             ->columns([
                 TextColumn::make('name')
                     ->label('Ativo')
                     ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->sortable(),
+
                 TextColumn::make('ticker_or_code')
                     ->label('Ticker / Código')
                     ->searchable()
@@ -28,6 +28,7 @@ class AssetsTable
                     ->color('gray'),
                 TextColumn::make('type')
                     ->label('Tipo')
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'STOCK' => 'success',
@@ -37,11 +38,18 @@ class AssetsTable
                         default => 'gray',
                     })
                     ->sortable(),
+                TextColumn::make('rate_label')
+                    ->label('Rentabilidade')
+                    ->badge()
+                    ->color('warning')
+                    ->getStateUsing(fn (Asset $record): ?string => $record->rateLabel())
+                    ->visible(fn ($livewire): bool => ($livewire->activeTab ?? null) === 'fixed_income'),
                 TextColumn::make('transactions_count')
                     ->label('Movimentações')
                     ->counts('transactions')
                     ->badge()
-                    ->alignCenter(),
+                    ->alignCenter()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('quantity')
                     ->label('Quantidade')
                     ->alignEnd()
@@ -56,8 +64,27 @@ class AssetsTable
                     ->label('Valor atual')
                     ->alignEnd()
                     ->getStateUsing(fn (Asset $record): float => $record->currentValue())
-                    ->money('BRL')
-                    ->color(fn (Asset $record): string => $record->currentValue() >= $record->purchaseValue() ? 'success' : 'danger'),
+                    ->money('BRL'),
+                TextColumn::make('dividends')
+                    ->label('Proventos')
+                    ->alignEnd()
+                    ->color('success')
+                    ->getStateUsing(fn (Asset $record): float => $record->dividendsReceived())
+                    ->money('BRL'),
+                TextColumn::make('variation')
+                    ->label('Rent. s/ proventos')
+                    ->alignEnd()
+                    ->badge()
+                    ->getStateUsing(fn (Asset $record): ?float => $record->percentChange())
+                    ->formatStateUsing(fn (?float $state): string => self::formatPercent($state))
+                    ->color(fn (?float $state): string => self::percentColor($state)),
+                TextColumn::make('variation_with_dividends')
+                    ->label('Rent. c/ proventos')
+                    ->alignEnd()
+                    ->badge()
+                    ->getStateUsing(fn (Asset $record): ?float => $record->percentChangeWithDividends())
+                    ->formatStateUsing(fn (?float $state): string => self::formatPercent($state))
+                    ->color(fn (?float $state): string => self::percentColor($state)),
                 TextColumn::make('currency')
                     ->label('Moeda')
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -81,5 +108,24 @@ class AssetsTable
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    private static function formatPercent(?float $state): string
+    {
+        if ($state === null) {
+            return '—';
+        }
+
+        return sprintf('%s%s%%', $state >= 0 ? '+' : '', number_format($state, 2, ',', '.'));
+    }
+
+    private static function percentColor(?float $state): string
+    {
+        return match (true) {
+            $state === null => 'gray',
+            $state > 0 => 'success',
+            $state < 0 => 'danger',
+            default => 'gray',
+        };
     }
 }
