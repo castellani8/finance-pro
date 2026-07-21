@@ -14,6 +14,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 class AssetsTable
 {
@@ -54,6 +55,28 @@ class AssetsTable
                     ->badge()
                     ->color('warning')
                     ->getStateUsing(fn (Asset $record): ?string => $record->rateLabel())
+                    ->visible(fn ($livewire): bool => ($livewire->activeTab ?? null) === 'fixed_income'),
+                TextColumn::make('due_date')
+                    ->label('Vencimento')
+                    ->badge()
+                    ->getStateUsing(fn (Asset $record): ?string => $record->metadata['due_date'] ?? null)
+                    ->formatStateUsing(fn (?string $state): string => $state
+                        ? Carbon::parse($state)->format('d/m/Y')
+                        : '—')
+                    ->color(function (?string $state): string {
+                        if (! $state) {
+                            return 'gray';
+                        }
+
+                        $days = now()->startOfDay()->diffInDays(Carbon::parse($state), false);
+
+                        return match (true) {
+                            $days < 0 => 'danger',
+                            $days <= 30 => 'warning',
+                            default => 'gray',
+                        };
+                    })
+                    ->placeholder('—')
                     ->visible(fn ($livewire): bool => ($livewire->activeTab ?? null) === 'fixed_income'),
                 TextColumn::make('depreciation_rate')
                     ->label('Depreciação')
@@ -132,7 +155,7 @@ class AssetsTable
                     ->formatStateUsing(fn (float $state): string => rtrim(rtrim(number_format($state, 6, ',', '.'), '0'), ','))
                     // Bens físicos são normalmente unitários; a quantidade fica no extrato.
                     ->visible(fn ($livewire): bool => ($livewire->activeTab ?? null) !== 'physical')
-                    ->sortable(query: self::sortByComputed('positionQuantity')),
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('position_quantity', $direction)),
                 TextColumn::make('average_buy_price')
                     ->label('Preço médio')
                     ->alignEnd()
@@ -189,13 +212,13 @@ class AssetsTable
                     ->getStateUsing(fn (Asset $record): float => $record->purchaseValue())
                     ->money('BRL')
                     ->visible(fn ($livewire): bool => ($livewire->activeTab ?? null) === 'physical')
-                    ->sortable(query: self::sortByComputed('purchaseValue')),
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('invested_value', $direction)),
                 TextColumn::make('current_value')
                     ->label('Valor atual')
                     ->alignEnd()
                     ->getStateUsing(fn (Asset $record): float => $record->currentValue())
                     ->money('BRL')
-                    ->sortable(query: self::sortByComputed('currentValue')),
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('current_value', $direction)),
                 TextColumn::make('dividends')
                     ->label('Proventos')
                     ->alignEnd()

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Models\Account;
 use App\Models\Asset;
 use App\Models\Tenant;
 use App\Support\CompanyFilter;
@@ -33,6 +34,7 @@ class AllocationChart extends ChartWidget
         'COMMODITY' => '#eab308',
         'COLLECTIBLE' => '#ec4899',
         'SOFTWARE' => '#14b8a6',
+        'CASH' => '#64748b',
         'OTHER' => '#9ca3af',
     ];
 
@@ -63,6 +65,7 @@ class AllocationChart extends ChartWidget
             ->wherePositionPositive()
             ->with('transactions')
             ->get()
+            ->tap(fn ($assets) => Asset::primeMarketData($assets))
             ->groupBy('type')
             ->map(fn ($assets): float => round(
                 (float) $assets->sum(fn (Asset $asset) => $asset->currentValue()),
@@ -71,9 +74,19 @@ class AllocationChart extends ChartWidget
             ->filter(fn (float $total): bool => $total > 0)
             ->sortDesc();
 
+        // Saldo em contas de dinheiro entra como a fatia "Caixa".
+        $cash = (float) CompanyFilter::applyToCompanyColumn(
+            Account::query()->where('tenant_id', $tenant->getKey()),
+            $companyId,
+        )->with('transactions')->get()->sum(fn (Account $account): float => $account->balanceInBrlAt());
+
+        if ($cash > 0.005) {
+            $totals->put('CASH', round($cash, 2));
+        }
+
         return [
             'labels' => $totals->keys()
-                ->map(fn (string $type): string => Asset::TYPE_LABELS[$type] ?? $type)
+                ->map(fn (string $type): string => $type === 'CASH' ? 'Caixa / Contas' : (Asset::TYPE_LABELS[$type] ?? $type))
                 ->all(),
             'datasets' => [
                 [

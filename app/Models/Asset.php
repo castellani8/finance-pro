@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\CurrencyConverter;
 use App\Services\IndexAccumulator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,10 +11,24 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 class Asset extends Model
 {
+    use LogsActivity;
+
+    /** Auditoria: registra criações/edições/exclusões dos campos preenchíveis. */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
+    }
+
     use HasFactory;
 
     protected $table = 'assets';
@@ -44,6 +59,52 @@ class Asset extends Model
 
     /** Cache dos dois últimos fechamentos por ticker (variação do dia). */
     protected static array $lastClosesCache = [];
+
+    /**
+     * Pré-carrega numa ÚNICA query os dois últimos fechamentos de todos os
+     * tickers do conjunto, populando os caches usados por currentUnitPrice()
+     * e dailyChangePercent() — sem isso, cada linha da tabela faria 1-2
+     * queries próprias.
+     *
+     * @param  iterable<int, self>  $assets
+     */
+    public static function primeMarketData(iterable $assets): void
+    {
+        $tickers = collect($assets)
+            ->map(fn ($asset): ?string => $asset instanceof self ? $asset->ticker_or_code : null)
+            ->filter()
+            ->unique()
+            ->reject(fn (string $ticker): bool => array_key_exists($ticker, static::$lastClosesCache))
+            ->values();
+
+        if ($tickers->isEmpty()) {
+            return;
+        }
+
+        $placeholders = implode(',', array_fill(0, $tickers->count(), '?'));
+
+        $rows = DB::select(
+            "select ticker, price_close from (
+                select ticker, price_close,
+                       row_number() over (partition by ticker order by date desc) as rn
+                from asset_price_history
+                where price_close is not null and ticker in ({$placeholders})
+            ) ranked where rn <= 2 order by ticker, rn",
+            $tickers->all(),
+        );
+
+        $closesByTicker = [];
+
+        foreach ($rows as $row) {
+            $closesByTicker[$row->ticker][] = (float) $row->price_close;
+        }
+
+        foreach ($tickers as $ticker) {
+            $closes = $closesByTicker[$ticker] ?? [];
+            static::$lastClosesCache[$ticker] = $closes;
+            static::$priceCache[$ticker] = $closes[0] ?? null;
+        }
+    }
 
     /**
      * Tipos de transação que movem custódia (alteram a quantidade em carteira).
@@ -95,6 +156,21 @@ class Asset extends Model
         return in_array($this->type, self::PHYSICAL_TYPES, true);
     }
 
+    /**
+     * Converte um valor da moeda do ativo para BRL pela cotação da data
+     * (null = hoje). Ativos em BRL passam direto.
+     */
+    protected function toBrlAt(float $value, ?string $date = null): float
+    {
+        $currency = strtoupper((string) ($this->currency ?? 'BRL'));
+
+        if ($currency === 'BRL' || $currency === '') {
+            return $value;
+        }
+
+        return app(CurrencyConverter::class)->toBrl($value, $currency, $date);
+    }
+
     /** Taxa de depreciação linear anual (% a.a.) configurada no ativo. */
     public function depreciationRate(): float
     {
@@ -105,6 +181,16 @@ class Asset extends Model
 
     /** Memoização das transações em ordem cronológica (cálculos repetem por snapshot). */
     protected ?Collection $chronologicalTransactions = null;
+
+    /** Recarregar a relação de transações invalida o memo cronológico. */
+    public function setRelation($relation, $value)
+    {
+        if ($relation === 'transactions') {
+            $this->chronologicalTransactions = null;
+        }
+
+        return parent::setRelation($relation, $value);
+    }
 
     /** Transações ordenadas por data e id, sem cast de Carbon (barato de repetir). */
     protected function chronologicalTransactions(): Collection
@@ -156,31 +242,107 @@ class Asset extends Model
     }
 
     /**
-     * Preço médio de aquisição: custo das compras diluído pelas ações que
-     * entraram de graça (bonificações e desdobramentos entram a custo zero).
+     * Pool de custo cronológico: compras (e bonificações com custo informado)
+     * somam custo; saídas removem custo proporcional à fração que saiu;
+     * grupamento redefine a quantidade SEM mexer no custo (o custo fiscal não
+     * muda num grupamento); transferências entre corretoras são ignoradas
+     * (movem custódia, não são evento econômico).
+     *
+     * @return array{0: float, 1: float, 2: array<int, array{date: string, proceeds: float, cost: float, gain: float}>}
+     *                                                                                                                  [custo restante, posição, vendas realizadas]
+     */
+    protected function costPoolAt(?string $until = null): array
+    {
+        $pool = 0.0;
+        $position = 0.0;
+        $sales = [];
+
+        foreach ($this->chronologicalTransactions() as $t) {
+            $date = substr((string) $t->getRawOriginal('transaction_date'), 0, 10);
+
+            if ($until !== null && $date > $until) {
+                break;
+            }
+
+            if (! in_array($t->type, self::POSITION_TYPES, true) || $t->type === 'TRANSFER') {
+                continue;
+            }
+
+            $quantity = (float) $t->quantity;
+            // Custo em BRL pelo câmbio da DATA do evento (custo histórico,
+            // como manda o IR para ativos em moeda estrangeira).
+            $total = $this->toBrlAt((float) $t->total_amount, $date);
+
+            if ($t->type === 'GROUPING') {
+                if ($t->isCredit()) {
+                    $position = $quantity;
+                }
+
+                continue;
+            }
+
+            if ($t->isCredit()) {
+                $position += $quantity;
+                $pool += $total;
+
+                continue;
+            }
+
+            // Saída (venda, vencimento, fração...): remove custo proporcional.
+            $removedCost = $position > 1e-12
+                ? min(1.0, $quantity / $position) * $pool
+                : 0.0;
+            $pool -= $removedCost;
+            $position -= $quantity;
+
+            if ($t->type === 'SELL' && $total > 0) {
+                $sales[] = [
+                    'date' => $date,
+                    'proceeds' => $total,
+                    'cost' => $removedCost,
+                    'gain' => $total - $removedCost,
+                ];
+            }
+        }
+
+        return [max(0.0, $pool), $position, $sales];
+    }
+
+    /**
+     * Vendas realizadas no ano (preço de venda x custo removido do pool),
+     * para a apuração de ganho de capital do relatório IR.
+     *
+     * @return array<int, array{date: string, proceeds: float, cost: float, gain: float}>
+     */
+    public function realizedSalesForYear(int $year): array
+    {
+        [, , $sales] = $this->costPoolAt(($year).'-12-31');
+
+        return array_values(array_filter(
+            $sales,
+            fn (array $sale): bool => str_starts_with($sale['date'], (string) $year),
+        ));
+    }
+
+    /**
+     * Preço médio da posição atual: custo restante do pool dividido pela
+     * quantidade — bonificações/desdobramentos diluem, grupamento rebaseia.
      */
     public function averageBuyPrice(?string $until = null): float
     {
-        $transactions = $this->transactionsUntil($until);
-        $buys = $transactions->where('type', 'BUY');
-        $buyQuantity = (float) $buys->sum(fn (Transaction $t) => (float) $t->quantity);
+        [$pool] = $this->costPoolAt($until);
+        $position = $this->positionQuantity($until);
 
-        $zeroCostQuantity = (float) $transactions
-            ->filter(fn (Transaction $t): bool => in_array($t->type, ['BONUS', 'SPLIT'], true))
-            ->sum(fn (Transaction $t) => $t->isCredit() ? (float) $t->quantity : -(float) $t->quantity);
-
-        $quantity = $buyQuantity + max(0.0, $zeroCostQuantity);
-
-        if ($quantity <= 0) {
+        if ($position <= 0) {
             return 0.0;
         }
 
-        return (float) $buys->sum(fn (Transaction $t) => (float) $t->total_amount) / $quantity;
+        return $pool / $position;
     }
 
     /**
      * Valor investido: custo da posição atual.
-     * - Papéis: preço médio x quantidade atual.
+     * - Papéis: custo restante do pool (correto mesmo após grupamentos).
      * - Físicos: aquisições + benfeitorias + despesas (custo real de posse),
      *   proporcional à fração ainda mantida.
      */
@@ -190,7 +352,9 @@ class Asset extends Model
             return $this->physicalInvestedAt($until);
         }
 
-        return $this->averageBuyPrice($until) * $this->positionQuantity($until);
+        [$pool] = $this->costPoolAt($until);
+
+        return $pool;
     }
 
     /**
@@ -206,7 +370,10 @@ class Asset extends Model
 
         $buys = (float) $this->transactionsUntil($until)
             ->where('type', 'BUY')
-            ->sum(fn (Transaction $t) => (float) $t->total_amount);
+            ->sum(fn (Transaction $t) => $this->toBrlAt(
+                (float) $t->total_amount,
+                substr((string) $t->getRawOriginal('transaction_date'), 0, 10),
+            ));
 
         return max(0.0, $buys * $this->heldFractionAt($until));
     }
@@ -218,7 +385,10 @@ class Asset extends Model
 
         $cost = (float) $transactions
             ->whereIn('type', ['BUY', 'IMPROVEMENT', 'EXPENSE'])
-            ->sum(fn (Transaction $t) => (float) $t->total_amount);
+            ->sum(fn (Transaction $t) => $this->toBrlAt(
+                (float) $t->total_amount,
+                substr((string) $t->getRawOriginal('transaction_date'), 0, 10),
+            ));
 
         return max(0.0, $cost * $this->heldFractionAt($until));
     }
@@ -323,7 +493,10 @@ class Asset extends Model
         return (float) $this->transactions
             ->filter(fn (Transaction $t): bool => in_array($t->type, self::CASH_INCOME_TYPES, true)
                 && substr((string) $t->getRawOriginal('transaction_date'), 0, 10) >= $cutoff)
-            ->sum(fn (Transaction $t) => ($t->isCredit() ? 1 : -1) * (float) $t->total_amount);
+            ->sum(fn (Transaction $t) => ($t->isCredit() ? 1 : -1) * $this->toBrlAt(
+                (float) $t->total_amount,
+                substr((string) $t->getRawOriginal('transaction_date'), 0, 10),
+            ));
     }
 
     /** Total de despesas lançadas no ativo (manutenção, custos de posse). */
@@ -331,7 +504,10 @@ class Asset extends Model
     {
         return (float) $this->transactions
             ->where('type', 'EXPENSE')
-            ->sum(fn (Transaction $t) => (float) $t->total_amount);
+            ->sum(fn (Transaction $t) => $this->toBrlAt(
+                (float) $t->total_amount,
+                substr((string) $t->getRawOriginal('transaction_date'), 0, 10),
+            ));
     }
 
     /** Despesas do ativo nos últimos 12 meses. */
@@ -342,7 +518,10 @@ class Asset extends Model
         return (float) $this->transactions
             ->filter(fn (Transaction $t): bool => $t->type === 'EXPENSE'
                 && substr((string) $t->getRawOriginal('transaction_date'), 0, 10) >= $cutoff)
-            ->sum(fn (Transaction $t) => (float) $t->total_amount);
+            ->sum(fn (Transaction $t) => $this->toBrlAt(
+                (float) $t->total_amount,
+                substr((string) $t->getRawOriginal('transaction_date'), 0, 10),
+            ));
     }
 
     /**
@@ -406,7 +585,7 @@ class Asset extends Model
             return $this->purchaseValue();
         }
 
-        return $this->positionQuantity() * $price;
+        return $this->toBrlAt($this->positionQuantity() * $price);
     }
 
     /**
@@ -438,35 +617,51 @@ class Asset extends Model
             ->sortBy($sortKey)
             ->last();
 
+        // Cada componente do valor deprecia com relógio próprio a partir da
+        // sua data: uma benfeitoria recente não "herda" a idade do bem. A
+        // reavaliação substitui tudo que veio antes e zera o relógio da base.
+        $components = [];
+
         if ($revaluation !== null) {
             $revaluationKey = $sortKey($revaluation);
-            $base = (float) $revaluation->total_amount;
-            // Benfeitorias lançadas depois da reavaliação (desempate por id
-            // quando caem no mesmo dia) somam à nova base.
-            $base += (float) $transactions
-                ->where('type', 'IMPROVEMENT')
-                ->filter(fn (Transaction $t): bool => $sortKey($t) > $revaluationKey)
-                ->sum(fn (Transaction $t) => (float) $t->total_amount);
-            $depreciationStart = substr((string) $revaluation->getRawOriginal('transaction_date'), 0, 10);
+            $components[] = [
+                'value' => (float) $revaluation->total_amount,
+                'since' => substr((string) $revaluation->getRawOriginal('transaction_date'), 0, 10),
+            ];
+
+            foreach ($transactions->where('type', 'IMPROVEMENT') as $improvement) {
+                if ($sortKey($improvement) > $revaluationKey) {
+                    $components[] = [
+                        'value' => (float) $improvement->total_amount,
+                        'since' => substr((string) $improvement->getRawOriginal('transaction_date'), 0, 10),
+                    ];
+                }
+            }
         } else {
-            $base = (float) $transactions
-                ->whereIn('type', ['BUY', 'IMPROVEMENT'])
-                ->sum(fn (Transaction $t) => (float) $t->total_amount);
-            $firstBuy = $transactions
-                ->where('type', 'BUY')
-                ->map(fn (Transaction $t): string => substr((string) $t->getRawOriginal('transaction_date'), 0, 10))
-                ->min();
-            $depreciationStart = $firstBuy ?: null;
+            foreach ($transactions->whereIn('type', ['BUY', 'IMPROVEMENT']) as $entry) {
+                $components[] = [
+                    'value' => (float) $entry->total_amount,
+                    'since' => substr((string) $entry->getRawOriginal('transaction_date'), 0, 10),
+                ];
+            }
         }
 
         $rate = $this->depreciationRate();
+        $base = 0.0;
 
-        if ($rate > 0 && $depreciationStart !== null) {
-            $years = max(0.0, Carbon::parse($depreciationStart)->floatDiffInYears(Carbon::parse($until)));
-            $base *= max(0.0, 1 - ($rate / 100) * $years);
+        foreach ($components as $component) {
+            $value = $component['value'];
+
+            if ($rate > 0 && $component['since'] !== '') {
+                $years = max(0.0, Carbon::parse($component['since'])->floatDiffInYears(Carbon::parse($until)));
+                $value *= max(0.0, 1 - ($rate / 100) * $years);
+            }
+
+            $base += $value;
         }
 
-        return max(0.0, $base * $fraction);
+        // Base na moeda do ativo; valor de mercado convertido pelo câmbio da data.
+        return $this->toBrlAt(max(0.0, $base * $fraction), $until);
     }
 
     /**
@@ -502,7 +697,7 @@ class Asset extends Model
             return $carry + ((float) $t->total_amount * $factor);
         }, 0.0);
 
-        return $corrected * $heldFraction;
+        return $this->toBrlAt($corrected * $heldFraction, $until);
     }
 
     /**
@@ -526,7 +721,9 @@ class Asset extends Model
             return 0.0;
         }
 
-        return $price !== null ? $quantity * $price : $this->purchaseValue($date);
+        return $price !== null
+            ? $this->toBrlAt($quantity * $price, $date)
+            : $this->purchaseValue($date);
     }
 
     /** Indexador do título de renda fixa (do metadata ou inferido pelo tipo de papel). */
@@ -612,7 +809,10 @@ class Asset extends Model
     {
         return (float) $this->transactions
             ->whereIn('type', self::CASH_INCOME_TYPES)
-            ->sum(fn (Transaction $t) => ($t->isCredit() ? 1 : -1) * (float) $t->total_amount);
+            ->sum(fn (Transaction $t) => ($t->isCredit() ? 1 : -1) * $this->toBrlAt(
+                (float) $t->total_amount,
+                substr((string) $t->getRawOriginal('transaction_date'), 0, 10),
+            ));
     }
 
     /** Variação percentual sem proventos (só preço/correção): valor atual vs custo. */
@@ -640,22 +840,12 @@ class Asset extends Model
     }
 
     /**
-     * Filtra apenas ativos com posição líquida (quantidade) maior que zero.
-     *
-     * O grupamento redefine a posição em vez de somar/subtrair, o que não é
-     * expressável num agregado SQL simples; calcula a posição em PHP (mesma
-     * regra de positionQuantity) e filtra por id. Clona a própria query para
-     * herdar os filtros já aplicados (tenant, tipo...) e não computar ativos
-     * de outros tenants.
+     * Filtra apenas ativos com posição líquida maior que zero, usando a
+     * coluna materializada (mantida pelo TransactionObserver e pelo refresher)
+     * — sem carregar transações nem calcular em PHP a cada request.
      */
     public function scopeWherePositionPositive(Builder $query): Builder
     {
-        $ids = (clone $query)
-            ->with('transactions:id,asset_id,type,transaction_date,quantity,direction')
-            ->get([$query->qualifyColumn('id')])
-            ->filter(fn (Asset $asset): bool => $asset->positionQuantity() > 1e-9)
-            ->modelKeys();
-
-        return $query->whereIn($query->qualifyColumn('id'), $ids);
+        return $query->where($query->qualifyColumn('position_quantity'), '>', 0);
     }
 }

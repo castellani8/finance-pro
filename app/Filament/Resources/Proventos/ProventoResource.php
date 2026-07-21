@@ -11,13 +11,15 @@ use BackedEnum;
 use Filament\Facades\Filament;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
-use Filament\Tables\Columns\Summarizers\Sum;
+use Filament\Tables\Columns\Summarizers\Summarizer;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Extrato de proventos (dividendos, JCP, rendimentos, juros, amortizações e
@@ -95,7 +97,13 @@ class ProventoResource extends Resource
                     ->formatStateUsing(fn ($state, Transaction $record): string => ($record->isCredit() ? '' : '-')
                         .'R$ '.number_format((float) $state, 2, ',', '.'))
                     ->sortable()
-                    ->summarize(Sum::make()->label('Total')->money('BRL')),
+                    // Soma com sinal: estornos em débito subtraem do total.
+                    ->summarize(Summarizer::make()
+                        ->label('Total')
+                        ->using(fn (QueryBuilder $query): float => (float) $query->sum(
+                            DB::raw("case when direction = 'Credito' then total_amount else -total_amount end")
+                        ))
+                        ->money('BRL')),
                 TextColumn::make('institution')
                     ->label('Instituição')
                     ->limit(30)

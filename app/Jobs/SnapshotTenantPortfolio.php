@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Tenant;
+use App\Services\AssetMetricsRefresher;
 use App\Services\PortfolioEvolution;
 use App\Support\PortfolioCache;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -28,6 +29,10 @@ class SnapshotTenantPortfolio implements ShouldQueue
 
     public function handle(PortfolioEvolution $evolution): void
     {
+        // Preços e câmbio mudaram desde ontem: rematerializa as métricas dos
+        // ativos antes de fotografar.
+        app(AssetMetricsRefresher::class)->refreshTenant($this->tenant);
+
         $evolution->dailySeries($this->tenant, $this->days, $this->rebuild);
 
         PortfolioCache::bump($this->tenant->getKey());

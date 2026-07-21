@@ -20,6 +20,7 @@ class AssetsPortfolioOverview extends StatsOverviewWidget
     protected function getStats(): array
     {
         $assets = $this->getPageTableQuery()->with('transactions')->get();
+        Asset::primeMarketData($assets);
 
         $invested = $assets->sum(fn (Asset $a) => $a->purchaseValue());
         $current = $assets->sum(fn (Asset $a) => $a->currentValue());

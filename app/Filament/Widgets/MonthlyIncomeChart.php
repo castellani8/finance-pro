@@ -5,6 +5,7 @@ namespace App\Filament\Widgets;
 use App\Models\Asset;
 use App\Models\Tenant;
 use App\Models\Transaction;
+use App\Services\CurrencyConverter;
 use App\Support\CompanyFilter;
 use App\Support\PortfolioCache;
 use Filament\Facades\Filament;
@@ -58,19 +59,30 @@ class MonthlyIncomeChart extends ChartWidget
     {
         $start = now()->subMonthsNoOverflow($months - 1)->startOfMonth();
 
+        $converter = app(CurrencyConverter::class);
+
         $byMonth = Transaction::query()
-            ->where('tenant_id', $tenant->getKey())
-            ->whereIn('type', Asset::CASH_INCOME_TYPES)
+            ->where('transactions.tenant_id', $tenant->getKey())
+            ->whereIn('transactions.type', Asset::CASH_INCOME_TYPES)
             ->whereNotNull('asset_id')
             ->when($companyId !== null, fn ($query) => $query->whereIn('asset_id', fn ($sub) => CompanyFilter::applyToCompanyColumn(
                 $sub->select('id')->from('assets'),
                 $companyId,
             )))
-            ->where('transaction_date', '>=', $start->toDateString())
-            ->get(['transaction_date', 'total_amount', 'direction', 'type'])
+            ->where('transactions.transaction_date', '>=', $start->toDateString())
+            ->leftJoin('assets', 'assets.id', '=', 'transactions.asset_id')
+            ->get([
+                'transactions.transaction_date', 'transactions.total_amount',
+                'transactions.direction', 'transactions.type',
+                'assets.currency as asset_currency',
+            ])
             ->groupBy(fn (Transaction $t): string => $t->transaction_date->format('Y-m'))
             ->map(fn ($group): float => (float) $group->sum(
-                fn (Transaction $t) => ($t->isCredit() ? 1 : -1) * (float) $t->total_amount
+                fn (Transaction $t) => ($t->isCredit() ? 1 : -1) * $converter->toBrl(
+                    (float) $t->total_amount,
+                    $t->asset_currency ?? 'BRL',
+                    $t->transaction_date->toDateString(),
+                )
             ));
 
         $labels = [];

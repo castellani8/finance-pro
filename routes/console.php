@@ -14,6 +14,7 @@ Artisan::command('inspire', function () {
 // fotografa a carteira de cada tenant com os dados frescos. Tudo via fila:
 // o scheduler não fica preso em API externa e cada tenant tem retry próprio.
 Schedule::job(new SyncMarketData('marketing:sync-indices'))->weekdays()->at('06:00');
+Schedule::job(new SyncMarketData('marketing:sync-currencies'))->weekdays()->at('06:10');
 Schedule::job(new SyncMarketData('marketing:sync-assets'))->weekdays()->at('06:30');
 Schedule::command('portfolio:snapshot')->weekdays()->at('07:30');
 
@@ -22,3 +23,6 @@ Schedule::job(new SyncMarketData('marketing:sync-tickers'))->sundays()->at('05:0
 
 // Contratos recorrentes (aluguéis, assinaturas) viram lançamentos no vencimento.
 Schedule::command('ledger:generate-recurring')->dailyAt('00:30');
+
+// Alertas diários: vencimentos, contratos terminando, cotações velhas, contas negativas.
+Schedule::command('portfolio:notify-alerts')->dailyAt('08:00');

@@ -118,6 +118,22 @@ class RelatorioIr extends Page
             ]);
         }
 
+        $lines[] = '';
+        $lines[] = "GANHO DE CAPITAL {$report['year']}";
+        $lines[] = 'Mes;Ganho acoes;Isento;DARF acoes;Ganho FIIs;DARF FIIs;DARF total';
+
+        foreach ($report['ganhos'] as $g) {
+            $lines[] = implode(';', [
+                $g['mes'],
+                $n($g['acoes']['ganho']),
+                $g['acoes']['isento'] ? 'sim' : 'nao',
+                $n($g['acoes']['darf']),
+                $n($g['fiis']['ganho']),
+                $n($g['fiis']['darf']),
+                $n($g['darf']),
+            ]);
+        }
+
         return implode("\n", $lines);
     }
 }

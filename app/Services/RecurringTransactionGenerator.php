@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Enums\FlowDirection;
 use App\Models\RecurringTransaction;
 use App\Models\Tenant;
 use App\Models\Transaction;
 use App\Support\PortfolioCache;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Materializa os contratos recorrentes em lançamentos reais: para cada
@@ -18,29 +20,70 @@ class RecurringTransactionGenerator
     /** @return int Quantidade de lançamentos criados. */
     public function generateDue(?Tenant $tenant = null, ?Carbon $today = null): int
     {
-        $today = ($today ?? now())->copy()->startOfDay();
-        $created = 0;
-        $touchedTenants = [];
+        // Trava: o botão "Gerar pendentes agora" e o cron podem coincidir;
+        // sem o lock, o mesmo vencimento sairia duplicado.
+        $lock = Cache::lock('recurring-transactions-generate', 60);
 
-        $contracts = RecurringTransaction::query()
-            ->where('active', true)
-            ->when($tenant, fn ($query) => $query->where('tenant_id', $tenant->getKey()))
-            ->get();
+        if (! $lock->get()) {
+            return 0;
+        }
 
-        foreach ($contracts as $contract) {
-            $generated = $this->generateForContract($contract, $today);
+        try {
+            $today = ($today ?? now())->copy()->startOfDay();
+            $created = 0;
+            $touchedTenants = [];
 
-            if ($generated > 0) {
-                $created += $generated;
-                $touchedTenants[$contract->tenant_id] = true;
+            $contracts = RecurringTransaction::query()
+                ->where('active', true)
+                ->when($tenant, fn ($query) => $query->where('tenant_id', $tenant->getKey()))
+                ->get();
+
+            // Lançamentos de sistema não entram na auditoria de ações humanas.
+            activity()->disableLogging();
+
+            try {
+                foreach ($contracts as $contract) {
+                    $generated = $this->generateForContract($contract, $today);
+
+                    if ($generated > 0) {
+                        $created += $generated;
+                        $touchedTenants[$contract->tenant_id] = ($touchedTenants[$contract->tenant_id] ?? 0) + $generated;
+                    }
+                }
+            } finally {
+                activity()->enableLogging();
             }
+
+            foreach ($touchedTenants as $tenantId => $count) {
+                PortfolioCache::bump($tenantId);
+                $this->notifyGenerated($tenantId, $count);
+            }
+
+            return $created;
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /** Avisa os usuários do tenant que lançamentos recorrentes foram gerados. */
+    private function notifyGenerated(int $tenantId, int $count): void
+    {
+        $tenant = Tenant::with('users')->find($tenantId);
+
+        if ($tenant === null) {
+            return;
         }
 
-        foreach (array_keys($touchedTenants) as $tenantId) {
-            PortfolioCache::bump($tenantId);
+        foreach ($tenant->users as $user) {
+            app(AlertDispatcher::class)->send(
+                $user,
+                $count === 1
+                    ? '1 lançamento recorrente gerado hoje'
+                    : "{$count} lançamentos recorrentes gerados hoje",
+                'Aluguéis, assinaturas e demais contratos do dia já estão no fluxo de caixa.',
+                level: 'info',
+            );
         }
-
-        return $created;
     }
 
     private function generateForContract(RecurringTransaction $contract, Carbon $today): int
@@ -57,12 +100,13 @@ class RecurringTransactionGenerator
                 'tenant_id' => $contract->tenant_id,
                 'asset_id' => $contract->asset_id,
                 'company_id' => $contract->company_id,
+                'account_id' => $contract->account_id,
                 'recurring_transaction_id' => $contract->getKey(),
                 'type' => $contract->type,
                 'transaction_date' => $dueDate->toDateString(),
                 'quantity' => 1,
                 'total_amount' => (float) $contract->amount,
-                'direction' => $contract->type === 'EXPENSE' ? 'Debito' : 'Credito',
+                'direction' => FlowDirection::defaultForType($contract->type)->value,
                 'movement' => $contract->description,
                 'category' => $contract->category,
                 'source' => 'recurring',

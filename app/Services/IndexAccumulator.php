@@ -61,8 +61,8 @@ class IndexAccumulator
             return $this->spreadFactor($spreadAnnual, $fromDate, $toDate);
         }
 
-        $base = $this->cumulativeAt($series, $fromDate);
-        $target = $this->cumulativeAt($series, $toDate);
+        $base = $this->cumulativeAt($series, $fromDate, $indexCode, $indexPercent);
+        $target = $this->cumulativeAt($series, $toDate, $indexCode, $indexPercent);
         $indexFactor = $base > 0 ? $target / $base : 1.0;
 
         // O spread capitaliza até onde a série alcança (não projeta o futuro).
@@ -71,12 +71,18 @@ class IndexAccumulator
         return $indexFactor * $this->spreadFactor($spreadAnnual, $fromDate, $spreadUntil);
     }
 
+    /** Índices publicados mensalmente (o registro do dia 1º vale o mês todo). */
+    private const MONTHLY_INDEXES = ['IPCA', 'IGP-M'];
+
     /**
-     * Fator acumulado da série no último registro com data <= $date (1.0 antes do início).
+     * Fator acumulado da série no último registro com data <= $date (1.0 antes
+     * do início). Para índices MENSAIS, o mês corrente entra pró-rata linear
+     * pelos dias decorridos — uma compra no meio do mês não ganha (nem perde)
+     * o mês inteiro de inflação.
      *
      * @param  array{dates: array<int, string>, cum: array<int, float>, latest: float, lastDate: string}  $series
      */
-    private function cumulativeAt(array $series, string $date): float
+    private function cumulativeAt(array $series, string $date, string $indexCode = '', float $indexPercent = 100.0): float
     {
         $dates = $series['dates'];
         $cum = $series['cum'];
@@ -96,7 +102,28 @@ class IndexAccumulator
             }
         }
 
-        return $pos >= 0 ? $cum[$pos] : 1.0;
+        if ($pos < 0) {
+            return 1.0;
+        }
+
+        if (! in_array($indexCode, self::MONTHLY_INDEXES, true)) {
+            return $cum[$pos];
+        }
+
+        // Pró-rata do mês do registro: cum[pos] já inclui o mês INTEIRO, então
+        // parte do acumulado anterior e aplica só a fração decorrida.
+        $record = Carbon::parse($dates[$pos]);
+        $target = Carbon::parse($date);
+
+        if (! $record->isSameMonth($target)) {
+            return $cum[$pos];
+        }
+
+        $previous = $pos > 0 ? $cum[$pos - 1] : 1.0;
+        $monthFactor = $previous > 0 ? $cum[$pos] / $previous : 1.0;
+        $fraction = ($target->day - 1) / $target->daysInMonth;
+
+        return $previous * (1 + ($monthFactor - 1) * $fraction);
     }
 
     /** Fator do spread anual capitalizado no período (ex: +5% a.a.). */

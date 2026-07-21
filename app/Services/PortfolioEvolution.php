@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Account;
 use App\Models\Asset;
 use App\Models\PortfolioSnapshot;
 use App\Models\Tenant;
@@ -25,13 +26,16 @@ class PortfolioEvolution
     public function monthlySeries(Tenant $tenant, ?int $months = null, int|string|null $companyId = null): array
     {
         $assets = $this->loadAssets($tenant, $companyId);
+        $accounts = $this->loadAccounts($tenant, $companyId);
         $firstDate = $this->firstTransactionDate($assets);
 
-        if ($firstDate === null) {
+        if ($firstDate === null && $accounts->isEmpty()) {
             return $this->emptySeries();
         }
 
-        return $this->buildSeries($assets, $this->monthlySnapshotDates($firstDate, $months), 'M/y');
+        $firstDate ??= now()->toDateString();
+
+        return $this->buildSeries($assets, $accounts, $this->monthlySnapshotDates($firstDate, $months), 'M/y');
     }
 
     /**
@@ -44,11 +48,14 @@ class PortfolioEvolution
     public function dailySeries(Tenant $tenant, int $days = 30, bool $rebuild = false, int|string|null $companyId = null): array
     {
         $assets = $this->loadAssets($tenant, $companyId);
+        $accounts = $this->loadAccounts($tenant, $companyId);
         $firstDate = $this->firstTransactionDate($assets);
 
-        if ($firstDate === null) {
+        if ($firstDate === null && $accounts->isEmpty()) {
             return $this->emptySeries();
         }
+
+        $firstDate ??= now()->toDateString();
 
         // Snapshots materializados valem para a carteira INTEIRA do tenant;
         // com filtro de empresa, calcula direto por data (sem ler/gravar).
@@ -62,7 +69,7 @@ class PortfolioEvolution
                 $cursor = $cursor->addDay();
             }
 
-            return $this->buildSeries($assets, $dates, 'd/m');
+            return $this->buildSeries($assets, $accounts, $dates, 'd/m');
         }
 
         $start = max($firstDate, now()->subDays($days - 1)->toDateString());
@@ -96,7 +103,7 @@ class PortfolioEvolution
             $prices = $this->loadPriceSeries($assets);
 
             foreach ($missing as $date) {
-                $computed[$date] = $this->valuePortfolioAt($assets, $prices, $date);
+                $computed[$date] = $this->valuePortfolioAt($assets, $accounts, $prices, $date);
             }
 
             $this->persistSnapshots($tenant, $computed);
@@ -133,7 +140,7 @@ class PortfolioEvolution
      * @param  array<int, string>  $dates
      * @return array{labels: array<int, string>, invested: array<int, float>, current: array<int, float>, cdi: array<int, float>, ibov: array<int, float>}
      */
-    private function buildSeries(Collection $assets, array $dates, string $labelFormat): array
+    private function buildSeries(Collection $assets, Collection $accounts, array $dates, string $labelFormat): array
     {
         $prices = $this->loadPriceSeries($assets);
 
@@ -142,7 +149,7 @@ class PortfolioEvolution
         $current = [];
 
         foreach ($dates as $date) {
-            [$inv, $cur] = $this->valuePortfolioAt($assets, $prices, $date);
+            [$inv, $cur] = $this->valuePortfolioAt($assets, $accounts, $prices, $date);
 
             $labels[] = Carbon::parse($date)->locale('pt_BR')->translatedFormat($labelFormat);
             $invested[] = round($inv, 2);
@@ -164,13 +171,15 @@ class PortfolioEvolution
     }
 
     /**
-     * Valor investido e de mercado da carteira inteira numa data.
+     * Valor investido e de mercado da carteira inteira numa data — inclui o
+     * saldo das contas de dinheiro no valor de mercado (dinheiro é patrimônio).
      *
      * @param  Collection<int, Asset>  $assets
+     * @param  Collection<int, Account>  $accounts
      * @param  array<string, array{dates: array<int, string>, closes: array<int, float>}>  $prices
      * @return array{0: float, 1: float}
      */
-    private function valuePortfolioAt(Collection $assets, array $prices, string $date): array
+    private function valuePortfolioAt(Collection $assets, Collection $accounts, array $prices, string $date): array
     {
         $invested = 0.0;
         $current = 0.0;
@@ -184,7 +193,22 @@ class PortfolioEvolution
             $current += max(0.0, $asset->valueAt($date, $price));
         }
 
+        foreach ($accounts as $account) {
+            $current += $account->balanceInBrlAt($date);
+        }
+
         return [$invested, $current];
+    }
+
+    /** @return Collection<int, Account> */
+    private function loadAccounts(Tenant $tenant, int|string|null $companyId = null): Collection
+    {
+        return CompanyFilter::applyToCompanyColumn(
+            Account::query()->where('tenant_id', $tenant->getKey()),
+            $companyId,
+        )
+            ->with('transactions')
+            ->get();
     }
 
     /**

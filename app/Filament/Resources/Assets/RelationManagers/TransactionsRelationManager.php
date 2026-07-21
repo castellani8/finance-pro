@@ -2,9 +2,11 @@
 
 namespace App\Filament\Resources\Assets\RelationManagers;
 
+use App\Enums\FlowDirection;
 use App\Models\Asset;
 use App\Models\PortfolioSnapshot;
 use App\Models\Transaction;
+use App\Services\CurrencyConverter;
 use App\Support\PortfolioCache;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -34,9 +36,6 @@ class TransactionsRelationManager extends RelationManager
 
     /** Tipos em que quantidade não faz sentido (o valor total é o que importa). */
     private const NO_QUANTITY_TYPES = ['IMPROVEMENT', 'EXPENSE', 'REVALUATION', 'INCOME', 'DIVIDEND', 'JCP', 'INTEREST', 'AMORTIZATION'];
-
-    /** Tipos lançados como saída (Débito). */
-    private const DEBIT_TYPES = ['SELL', 'EXPENSE'];
 
     public const TYPE_LABELS = [
         'BUY' => 'Compra',
@@ -81,6 +80,7 @@ class TransactionsRelationManager extends RelationManager
                 ->visible(fn (Get $get): bool => ! in_array($get('type'), self::NO_QUANTITY_TYPES, true)),
             TextInput::make('total_amount')
                 ->label(fn (Get $get): string => $get('type') === 'REVALUATION' ? 'Novo valor de mercado do bem' : 'Valor total')
+                ->prefix(fn (): string => CurrencyConverter::symbol($this->getOwnerRecord()->currency))
                 ->helperText(fn (Get $get): ?string => match ($get('type')) {
                     'REVALUATION' => 'Redefine o valor do ativo nesta data; a depreciação volta a contar daqui.',
                     'IMPROVEMENT' => 'Ex: reforma, peças, horas trabalhadas valorizadas em R$.',
@@ -89,8 +89,17 @@ class TransactionsRelationManager extends RelationManager
                 })
                 ->numeric()
                 ->minValue(0)
-                ->prefix('R$')
                 ->required(),
+            Select::make('account_id')
+                ->label('Conta (opcional)')
+                ->helperText('Vinculando uma conta, o dinheiro entra/sai do saldo dela.')
+                ->relationship(
+                    'account',
+                    'name',
+                    fn ($query) => $query->where('tenant_id', Filament::getTenant()->getKey()),
+                )
+                ->searchable()
+                ->preload(),
             Textarea::make('notes')
                 ->label('Observações')
                 ->rows(2)
@@ -226,7 +235,7 @@ class TransactionsRelationManager extends RelationManager
 
         $data['tenant_id'] = Filament::getTenant()->getKey();
         $data['source'] = 'manual';
-        $data['direction'] = in_array($data['type'] ?? '', self::DEBIT_TYPES, true) ? 'Debito' : 'Credito';
+        $data['direction'] = FlowDirection::defaultForType($data['type'] ?? '')->value;
         $data['quantity'] = $quantity > 0 ? $quantity : 1;
         $data['unit_price'] = $quantity > 0 ? $total / $quantity : null;
 

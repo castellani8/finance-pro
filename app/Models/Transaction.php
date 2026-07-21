@@ -2,13 +2,26 @@
 
 namespace App\Models;
 
+use App\Enums\FlowDirection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Str;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 class Transaction extends Model
 {
+    use LogsActivity;
+
+    /** Auditoria: registra criações/edições/exclusões dos campos preenchíveis. */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
+    }
+
     use HasFactory;
 
     protected $table = 'transactions';
@@ -31,6 +44,7 @@ class Transaction extends Model
         'company_id',
         'category',
         'recurring_transaction_id',
+        'account_id',
     ];
 
     protected $casts = [
@@ -61,16 +75,36 @@ class Transaction extends Model
         return $this->belongsTo(RecurringTransaction::class);
     }
 
-    /**
-     * Sentido do fluxo: entrada (Crédito) ou saída (Débito). Lançamentos manuais
-     * sem direction caem no tipo (SELL sai, o resto entra).
-     */
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
+    }
+
+    /** Sentido do fluxo, resolvido do texto salvo com fallback pelo tipo. */
+    public function flowDirection(): FlowDirection
+    {
+        return FlowDirection::resolve($this->direction, (string) $this->type);
+    }
+
+    /** Entrada (Crédito) ou saída (Débito). */
     public function isCredit(): bool
     {
-        if ($this->direction !== null && $this->direction !== '') {
-            return Str::upper(Str::ascii($this->direction)) === 'CREDITO';
+        return $this->flowDirection()->isCredit();
+    }
+
+    /**
+     * Efeito no CAIXA da conta vinculada: comprar um ativo tira dinheiro da
+     * conta (mesmo sendo "Crédito" de custódia); vender coloca; renda entra;
+     * despesa sai.
+     */
+    public function cashDelta(): float
+    {
+        $sign = $this->flowDirection()->sign();
+
+        if (in_array($this->type, Asset::POSITION_TYPES, true)) {
+            $sign = -$sign;
         }
 
-        return $this->type !== 'SELL';
+        return $sign * (float) $this->total_amount;
     }
 }

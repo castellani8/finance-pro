@@ -102,6 +102,17 @@ class LancamentoResource extends Resource
                 ->searchable()
                 ->preload()
                 ->placeholder('Opcional — de qual empresa é este lançamento'),
+            Select::make('account_id')
+                ->label('Conta')
+                ->helperText('Vinculando uma conta, o dinheiro entra/sai do saldo dela (e do patrimônio).')
+                ->relationship(
+                    'account',
+                    'name',
+                    fn ($query) => $query->where('tenant_id', Filament::getTenant()->getKey()),
+                )
+                ->searchable()
+                ->preload()
+                ->placeholder('Opcional'),
             Textarea::make('notes')
                 ->label('Observações')
                 ->rows(2)

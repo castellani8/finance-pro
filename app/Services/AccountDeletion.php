@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Account;
 use App\Models\Asset;
 use App\Models\Company;
 use App\Models\PortfolioSnapshot;
@@ -95,6 +96,15 @@ class AccountDeletion
                 'empresas' => Company::where('tenant_id', $tenant->getKey())
                     ->get(['name', 'document', 'email', 'phone', 'address', 'city', 'state', 'zip'])
                     ->toArray(),
+                'contas' => Account::with('transactions')
+                    ->where('tenant_id', $tenant->getKey())
+                    ->get()
+                    ->map(fn (Account $account): array => [
+                        'nome' => $account->name,
+                        'tipo' => $account->kind,
+                        'saldo_inicial' => (float) $account->opening_balance,
+                        'saldo_atual' => $account->balance(),
+                    ])->all(),
                 'recorrencias' => RecurringTransaction::where('tenant_id', $tenant->getKey())
                     ->get()
                     ->map(fn ($r): array => [

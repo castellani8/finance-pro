@@ -20,7 +20,7 @@ class SyncMarketData implements ShouldQueue
 
     public int $timeout = 3600;
 
-    /** @param  'marketing:sync-indices'|'marketing:sync-assets'|'marketing:sync-tickers'  $command */
+    /** @param  'marketing:sync-indices'|'marketing:sync-assets'|'marketing:sync-tickers'|'marketing:sync-currencies'  $command */
     public function __construct(public string $command) {}
 
     public function handle(): void

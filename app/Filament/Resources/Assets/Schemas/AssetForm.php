@@ -3,9 +3,11 @@
 namespace App\Filament\Resources\Assets\Schemas;
 
 use App\Filament\Resources\Companies\CompanyForm;
+use App\Models\Account;
 use App\Models\Asset;
 use App\Models\B3ListedTicker;
 use App\Models\Company;
+use App\Services\CurrencyConverter;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -92,7 +94,9 @@ class AssetForm
                             ->visible(fn (Get $get): bool => $get('type') === 'FIXED_INCOME'),
                         Select::make('currency')
                             ->label('Moeda')
+                            ->helperText('Lance os valores na moeda do ativo; a exibição converte para BRL pelo câmbio PTAX da data.')
                             ->required()
+                            ->live()
                             ->native(false)
                             ->options([
                                 'BRL' => 'Real (BRL)',
@@ -127,7 +131,7 @@ class AssetForm
                             ->label('Valor de aquisição')
                             ->numeric()
                             ->minValue(0)
-                            ->prefix('R$')
+                            ->prefix(fn (Get $get): string => CurrencyConverter::symbol($get('currency')))
                             ->required(fn (string $operation): bool => $operation === 'create')
                             ->dehydrated(false)
                             ->visibleOn('create'),
@@ -144,6 +148,17 @@ class AssetForm
                             ->numeric()
                             ->minValue(0.000001)
                             ->default(1)
+                            ->dehydrated(false)
+                            ->visibleOn('create'),
+                        Select::make('acquisition_account_id')
+                            ->label('Debitar da conta (opcional)')
+                            ->helperText('O valor da compra sai do saldo desta conta.')
+                            ->options(fn (): array => Account::query()
+                                ->where('tenant_id', Filament::getTenant()->getKey())
+                                ->orderBy('name')
+                                ->pluck('name', 'id')
+                                ->all())
+                            ->searchable()
                             ->dehydrated(false)
                             ->visibleOn('create'),
                         TextInput::make('metadata.depreciation_rate')

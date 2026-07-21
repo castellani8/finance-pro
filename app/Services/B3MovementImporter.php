@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Asset;
 use App\Models\Tenant;
 use App\Models\Transaction;
+use App\Observers\TransactionObserver;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -38,6 +39,10 @@ class B3MovementImporter
 
     private int $skipped = 0;
 
+    private int $incomeCreated = 0;
+
+    private float $incomeTotal = 0.0;
+
     /** @var array<string, Asset> Cache dos ativos já resolvidos nesta importação. */
     private array $assetCache = [];
 
@@ -60,11 +65,23 @@ class B3MovementImporter
         $columns = $this->mapColumns($header);
         $this->rowOccurrences = [];
 
-        DB::transaction(function () use ($rows, $columns, $tenant) {
-            foreach ($rows as $row) {
-                $this->processRow($row, $columns, $tenant);
-            }
-        });
+        // Em massa: observer por linha e auditoria linha a linha só atrapalham;
+        // as métricas materializadas são recalculadas de uma vez no final.
+        TransactionObserver::$enabled = false;
+        activity()->disableLogging();
+
+        try {
+            DB::transaction(function () use ($rows, $columns, $tenant) {
+                foreach ($rows as $row) {
+                    $this->processRow($row, $columns, $tenant);
+                }
+            });
+        } finally {
+            TransactionObserver::$enabled = true;
+            activity()->enableLogging();
+        }
+
+        app(AssetMetricsRefresher::class)->refreshTenant($tenant);
 
         return [
             'assets_created' => $this->assetsCreated,
@@ -72,6 +89,8 @@ class B3MovementImporter
             'transactions_created' => $this->transactionsCreated,
             'transactions_updated' => $this->transactionsUpdated,
             'skipped' => $this->skipped,
+            'income_created' => $this->incomeCreated,
+            'income_total' => round($this->incomeTotal, 2),
         ];
     }
 
@@ -195,6 +214,12 @@ class B3MovementImporter
         $transaction->wasRecentlyCreated
             ? $this->transactionsCreated++
             : $this->transactionsUpdated++;
+
+        // Proventos novos alimentam o alerta "provento recebido" pós-importação.
+        if ($transaction->wasRecentlyCreated && in_array($transaction->type, Asset::CASH_INCOME_TYPES, true)) {
+            $this->incomeCreated++;
+            $this->incomeTotal += $transaction->isCredit() ? (float) $total : -(float) $total;
+        }
     }
 
     private function upsertAsset(Tenant $tenant, string $type, ?string $code, string $name): Asset

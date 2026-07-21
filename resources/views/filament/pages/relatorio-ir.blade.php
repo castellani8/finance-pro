@@ -134,9 +134,50 @@
         </div>
     </x-filament::section>
 
+    <x-filament::section heading="Ganho de capital e DARF (renda variável)" description="Vendas x custo pelo método do pool. Ações: isenção quando as vendas do mês ficam até R$ 20 mil; FIIs: 20% sempre. Prejuízos compensam ganhos dos meses seguintes.">
+        <div style="overflow-x: auto">
+            <table class="ir-table">
+                <thead>
+                    <tr>
+                        <th>Mês</th>
+                        <th class="num">Ganho ações</th>
+                        <th></th>
+                        <th class="num">DARF ações</th>
+                        <th class="num">Ganho FIIs</th>
+                        <th class="num">DARF FIIs</th>
+                        <th class="num">DARF total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse ($report['ganhos'] as $ganho)
+                        <tr>
+                            <td>{{ $meses[$ganho['mes']] }}</td>
+                            <td class="num" style="{{ $ganho['acoes']['ganho'] < 0 ? 'color:#ef4444' : '' }}">{{ $money($ganho['acoes']['ganho']) }}</td>
+                            <td>@if ($ganho['acoes']['isento'] && $ganho['acoes']['ganho'] > 0)<span style="font-size:.75rem; opacity:.7">isento (&le; 20 mil)</span>@endif</td>
+                            <td class="num">{{ $money($ganho['acoes']['darf']) }}</td>
+                            <td class="num" style="{{ $ganho['fiis']['ganho'] < 0 ? 'color:#ef4444' : '' }}">{{ $money($ganho['fiis']['ganho']) }}</td>
+                            <td class="num">{{ $money($ganho['fiis']['darf']) }}</td>
+                            <td class="num" style="font-weight:700">{{ $money($ganho['darf']) }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="7">Nenhuma venda de renda variável em {{ $report['year'] }}.</td></tr>
+                    @endforelse
+                </tbody>
+                @if ($report['ganhos'] !== [])
+                    <tfoot>
+                        <tr style="font-weight: 700">
+                            <td colspan="6">DARF total do ano</td>
+                            <td class="num">{{ $money($report['totais']['darf']) }}</td>
+                        </tr>
+                    </tfoot>
+                @endif
+            </table>
+        </div>
+    </x-filament::section>
+
     <p class="ir-note">
-        ⚠️ Este relatório é um apoio ao preenchimento da declaração, calculado pelo preço médio das operações importadas.
-        Confira sempre com os <strong>informes de rendimentos</strong> das corretoras e das companhias. A apuração de ganho de capital
-        (DARF mensal) e ajustes de bonificação com custo informado pela empresa não estão inclusos. Isto não constitui aconselhamento tributário.
+        ⚠️ Este relatório é um apoio ao preenchimento da declaração, calculado pelo custo das operações importadas (método do pool,
+        correto inclusive após grupamentos). Confira sempre com os <strong>informes de rendimentos</strong> das corretoras e das companhias.
+        Operações day-trade não são separadas na apuração de ganho de capital. Isto não constitui aconselhamento tributário.
     </p>
 </x-filament-panels::page>

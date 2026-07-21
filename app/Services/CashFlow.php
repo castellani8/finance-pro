@@ -23,28 +23,40 @@ class CashFlow
         $start = now()->subMonthsNoOverflow($months - 1)->startOfMonth();
 
         $rows = Transaction::query()
-            ->where('tenant_id', $tenant->getKey())
-            ->whereIn('type', [...Asset::CASH_INCOME_TYPES, 'EXPENSE'])
-            ->where('transaction_date', '>=', $start->toDateString())
+            ->where('transactions.tenant_id', $tenant->getKey())
+            ->whereIn('transactions.type', [...Asset::CASH_INCOME_TYPES, 'EXPENSE'])
+            ->where('transactions.transaction_date', '>=', $start->toDateString())
             ->when(is_int($companyId), fn ($query) => $query->where(fn ($q) => $q
-                ->where('company_id', $companyId)
+                ->where('transactions.company_id', $companyId)
                 ->orWhereIn('asset_id', fn ($sub) => $sub
                     ->select('id')->from('assets')->where('company_id', $companyId))))
             // "Sem empresa": lançamento sem empresa E (avulso ou de ativo sem empresa).
             ->when($companyId === CompanyFilter::NONE, fn ($query) => $query
-                ->whereNull('company_id')
+                ->whereNull('transactions.company_id')
                 ->where(fn ($q) => $q
                     ->whereNull('asset_id')
                     ->orWhereIn('asset_id', fn ($sub) => $sub
                         ->select('id')->from('assets')->whereNull('company_id'))))
-            ->get(['transaction_date', 'total_amount', 'direction', 'type']);
+            // Moeda do lançamento: a do ativo, senão a da conta, senão BRL.
+            ->leftJoin('assets', 'assets.id', '=', 'transactions.asset_id')
+            ->leftJoin('accounts', 'accounts.id', '=', 'transactions.account_id')
+            ->get([
+                'transactions.transaction_date', 'transactions.total_amount',
+                'transactions.direction', 'transactions.type',
+                'assets.currency as asset_currency', 'accounts.currency as account_currency',
+            ]);
 
+        $converter = app(CurrencyConverter::class);
         $incomeByMonth = [];
         $expensesByMonth = [];
 
         foreach ($rows as $row) {
             $month = $row->transaction_date->format('Y-m');
-            $amount = (float) $row->total_amount;
+            $amount = $converter->toBrl(
+                (float) $row->total_amount,
+                $row->asset_currency ?? $row->account_currency ?? 'BRL',
+                $row->transaction_date->toDateString(),
+            );
 
             if ($row->type === 'EXPENSE') {
                 // Débito é a despesa; crédito é reembolso.

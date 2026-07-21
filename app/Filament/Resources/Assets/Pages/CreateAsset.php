@@ -37,6 +37,7 @@ class CreateAsset extends CreateRecord
             Transaction::create([
                 'tenant_id' => $tenantId,
                 'asset_id' => $asset->getKey(),
+                'account_id' => $this->data['acquisition_account_id'] ?? null,
                 'type' => 'BUY',
                 'transaction_date' => $date,
                 'quantity' => $quantity,

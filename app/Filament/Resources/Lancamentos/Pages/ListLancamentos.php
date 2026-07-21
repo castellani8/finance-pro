@@ -2,7 +2,9 @@
 
 namespace App\Filament\Resources\Lancamentos\Pages;
 
+use App\Enums\FlowDirection;
 use App\Filament\Resources\Lancamentos\LancamentoResource;
+use App\Models\PortfolioSnapshot;
 use App\Support\PortfolioCache;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -22,7 +24,7 @@ class ListLancamentos extends ListRecords
                 ->label('Novo lançamento')
                 ->modalHeading('Novo lançamento avulso')
                 ->mutateDataUsing(fn (array $data): array => self::prepareData($data))
-                ->after(fn () => PortfolioCache::bump(Filament::getTenant()->getKey())),
+                ->after(fn () => self::invalidate()),
         ];
     }
 
@@ -32,10 +34,19 @@ class ListLancamentos extends ListRecords
             ->recordActions([
                 EditAction::make()
                     ->mutateDataUsing(fn (array $data): array => self::prepareData($data))
-                    ->after(fn () => PortfolioCache::bump(Filament::getTenant()->getKey())),
+                    ->after(fn () => self::invalidate()),
                 DeleteAction::make()
-                    ->after(fn () => PortfolioCache::bump(Filament::getTenant()->getKey())),
+                    ->after(fn () => self::invalidate()),
             ]);
+    }
+
+    /** Lançamentos vinculados a conta mexem no saldo — que entra no patrimônio. */
+    private static function invalidate(): void
+    {
+        $tenantId = Filament::getTenant()->getKey();
+
+        PortfolioSnapshot::where('tenant_id', $tenantId)->delete();
+        PortfolioCache::bump($tenantId);
     }
 
     /** Completa os campos derivados de um lançamento avulso. */
@@ -44,7 +55,7 @@ class ListLancamentos extends ListRecords
         $data['tenant_id'] = Filament::getTenant()->getKey();
         $data['asset_id'] = null;
         $data['quantity'] = 1;
-        $data['direction'] = ($data['type'] ?? '') === 'EXPENSE' ? 'Debito' : 'Credito';
+        $data['direction'] = FlowDirection::defaultForType($data['type'] ?? '')->value;
         // source não é campo do form: criação usa o default 'manual' do banco
         // e edição preserva o valor existente (ex: 'recurring').
 

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Account;
 use App\Models\Asset;
 use App\Models\Tenant;
 use App\Models\Transaction;
@@ -40,23 +41,140 @@ class IrReport
             ->orderBy('name')
             ->get();
 
-        $bens = $this->bensEDireitos($assets, $year);
+        $accounts = Account::query()
+            ->where('tenant_id', $tenant->getKey())
+            ->with('transactions')
+            ->orderBy('name')
+            ->get();
+
+        $bens = [...$this->bensEDireitos($assets, $year), ...$this->contasEmBens($accounts, $year)];
         $proventos = $this->proventosDoAno($assets, $year);
         $vendas = $this->vendasPorMes($assets, $year);
+        $ganhos = $this->ganhosDeCapital($assets, $year);
 
         return [
             'year' => $year,
             'bens' => $bens,
             'proventos' => $proventos,
             'vendas' => $vendas,
+            'ganhos' => $ganhos,
             'totais' => [
                 'custo_anterior' => round(array_sum(array_column($bens, 'custo_anterior')), 2),
                 'custo_atual' => round(array_sum(array_column($bens, 'custo_atual')), 2),
                 'isentos' => round(array_sum(array_column($proventos, 'isentos')), 2),
                 'exclusivos' => round(array_sum(array_column($proventos, 'exclusivos')), 2),
                 'outros' => round(array_sum(array_column($proventos, 'outros')), 2),
+                'darf' => round(array_sum(array_column($ganhos, 'darf')), 2),
             ],
         ];
+    }
+
+    /**
+     * Saldos em contas de dinheiro em 31/12 (grupo 06 da declaração).
+     *
+     * @param  Collection<int, Account>  $accounts
+     * @return array<int, array<string, mixed>>
+     */
+    private function contasEmBens(Collection $accounts, int $year): array
+    {
+        $end = "{$year}-12-31";
+        $previousEnd = ($year - 1).'-12-31';
+        $rows = [];
+
+        foreach ($accounts as $account) {
+            $previous = max(0.0, $account->balanceInBrlAt($previousEnd));
+            $current = max(0.0, $account->balanceInBrlAt($end));
+
+            if ($previous <= 0.005 && $current <= 0.005) {
+                continue;
+            }
+
+            $rows[] = [
+                'ticker' => null,
+                'nome' => $account->name,
+                'tipo' => 'ACCOUNT',
+                'grupo_codigo' => '06 / 01 — Depósito em conta',
+                'quantidade' => 1.0,
+                'custo_anterior' => round($previous, 2),
+                'custo_atual' => round($current, 2),
+                'discriminacao' => sprintf(
+                    'Saldo em %s (%s) em 31/12/%d: R$ %s.',
+                    $account->name,
+                    Account::KIND_LABELS[$account->kind] ?? $account->kind,
+                    $year,
+                    number_format($current, 2, ',', '.'),
+                ),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Apuração simplificada de ganho de capital em renda variável, mês a mês:
+     * ações têm isenção quando as vendas do mês ficam até R$ 20 mil (15% sobre
+     * o ganho acima disso); FIIs pagam 20% sempre; prejuízos compensam ganhos
+     * dos meses seguintes da mesma classe. Operações day-trade não são separadas.
+     *
+     * @param  Collection<int, Asset>  $assets
+     * @return array<int, array<string, mixed>>
+     */
+    private function ganhosDeCapital(Collection $assets, int $year): array
+    {
+        $classes = [
+            'acoes' => ['types' => ['STOCK'], 'rate' => 0.15, 'exemption' => 20000.0],
+            'fiis' => ['types' => ['FII'], 'rate' => 0.20, 'exemption' => 0.0],
+        ];
+
+        $monthly = [];
+
+        foreach ($classes as $classKey => $config) {
+            foreach ($assets->whereIn('type', $config['types']) as $asset) {
+                foreach ($asset->realizedSalesForYear($year) as $sale) {
+                    $month = (int) substr($sale['date'], 5, 2);
+                    $monthly[$month][$classKey]['vendas'] = ($monthly[$month][$classKey]['vendas'] ?? 0.0) + $sale['proceeds'];
+                    $monthly[$month][$classKey]['ganho'] = ($monthly[$month][$classKey]['ganho'] ?? 0.0) + $sale['gain'];
+                }
+            }
+        }
+
+        ksort($monthly);
+
+        $carryLoss = ['acoes' => 0.0, 'fiis' => 0.0];
+        $rows = [];
+
+        foreach ($monthly as $month => $byClass) {
+            $row = ['mes' => $month, 'darf' => 0.0];
+
+            foreach ($classes as $classKey => $config) {
+                $sales = round($byClass[$classKey]['vendas'] ?? 0.0, 2);
+                $gain = round($byClass[$classKey]['ganho'] ?? 0.0, 2);
+                $exempt = $classKey === 'acoes' && $sales <= $config['exemption'];
+                $tax = 0.0;
+
+                if ($gain < 0) {
+                    // Prejuízo acumula para compensar meses seguintes.
+                    $carryLoss[$classKey] += -$gain;
+                } elseif ($gain > 0 && ! $exempt) {
+                    $taxable = max(0.0, $gain - $carryLoss[$classKey]);
+                    $carryLoss[$classKey] = max(0.0, $carryLoss[$classKey] - $gain);
+                    $tax = round($taxable * $config['rate'], 2);
+                }
+
+                $row[$classKey] = [
+                    'vendas' => $sales,
+                    'ganho' => $gain,
+                    'isento' => $exempt,
+                    'darf' => $tax,
+                ];
+                $row['darf'] += $tax;
+            }
+
+            $row['darf'] = round($row['darf'], 2);
+            $rows[] = $row;
+        }
+
+        return $rows;
     }
 
     /**
@@ -102,6 +220,7 @@ class IrReport
     private function proventosDoAno(Collection $assets, int $year): array
     {
         $rows = [];
+        $converter = app(CurrencyConverter::class);
 
         foreach ($assets as $asset) {
             $inYear = $asset->transactions->filter(
@@ -109,7 +228,11 @@ class IrReport
             );
 
             $signed = fn (Collection $group): float => (float) $group->sum(
-                fn (Transaction $t) => ($t->isCredit() ? 1 : -1) * (float) $t->total_amount
+                fn (Transaction $t) => ($t->isCredit() ? 1 : -1) * $converter->toBrl(
+                    (float) $t->total_amount,
+                    $asset->currency,
+                    substr((string) $t->getRawOriginal('transaction_date'), 0, 10),
+                )
             );
 
             $isentos = $signed($inYear->whereIn('type', self::EXEMPT_TYPES));
@@ -144,6 +267,7 @@ class IrReport
     private function vendasPorMes(Collection $assets, int $year): array
     {
         $months = [];
+        $converter = app(CurrencyConverter::class);
 
         foreach ($assets as $asset) {
             $sells = $asset->transactions->filter(
@@ -153,14 +277,16 @@ class IrReport
             );
 
             foreach ($sells as $sell) {
-                $month = (int) substr((string) $sell->getRawOriginal('transaction_date'), 5, 2);
+                $sellDate = substr((string) $sell->getRawOriginal('transaction_date'), 0, 10);
+                $month = (int) substr($sellDate, 5, 2);
                 $bucket = match ($asset->type) {
                     'STOCK' => 'acoes',
                     'FII' => 'fiis',
                     default => 'outros',
                 };
 
-                $months[$month][$bucket] = ($months[$month][$bucket] ?? 0.0) + (float) $sell->total_amount;
+                $months[$month][$bucket] = ($months[$month][$bucket] ?? 0.0)
+                    + $converter->toBrl((float) $sell->total_amount, $asset->currency, $sellDate);
             }
         }
 

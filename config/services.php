@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    'brapi' => [
+        'token' => env('BRAPI_TOKEN'),
+    ],
+
+    'notifications' => [
+        // Além do sino do painel, envia os alertas por e-mail (exige mailer configurado).
+        'mail' => env('NOTIFY_BY_EMAIL', false),
+    ],
+
 ];

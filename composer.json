@@ -11,7 +11,8 @@
         "laravel/framework": "^13.8",
         "laravel/tinker": "^3.0",
         "phpoffice/phpspreadsheet": "^5.9",
-        "scheb/yahoo-finance-api": "^5.2"
+        "scheb/yahoo-finance-api": "^5.2",
+        "spatie/laravel-activitylog": "^5.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

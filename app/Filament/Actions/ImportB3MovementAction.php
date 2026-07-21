@@ -4,6 +4,7 @@ namespace App\Filament\Actions;
 
 use App\Models\PortfolioSnapshot;
 use App\Models\Tenant;
+use App\Services\AlertDispatcher;
 use App\Services\B3MovementImporter;
 use App\Support\PortfolioCache;
 use Filament\Actions\Action;
@@ -85,6 +86,17 @@ class ImportB3MovementAction
                     ))
                     ->success()
                     ->send();
+
+                // Alerta persistente de proventos recebidos (fica no sino).
+                if (($result['income_created'] ?? 0) > 0 && auth()->user() !== null) {
+                    app(AlertDispatcher::class)->send(
+                        auth()->user(),
+                        $result['income_created'].' provento(s) recebido(s) na importação',
+                        'Total de R$ '.number_format((float) $result['income_total'], 2, ',', '.')
+                            .' em dividendos, JCP, rendimentos e juros novos.',
+                        level: 'success',
+                    );
+                }
             });
     }
 }

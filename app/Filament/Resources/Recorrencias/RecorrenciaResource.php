@@ -110,6 +110,16 @@ class RecorrenciaResource extends Resource
                 )
                 ->searchable()
                 ->preload(),
+            Select::make('account_id')
+                ->label('Conta (opcional)')
+                ->helperText('Cada lançamento gerado movimenta o saldo desta conta.')
+                ->relationship(
+                    'account',
+                    'name',
+                    fn ($query) => $query->where('tenant_id', Filament::getTenant()->getKey()),
+                )
+                ->searchable()
+                ->preload(),
             Select::make('category')
                 ->label('Categoria')
                 ->native(false)
