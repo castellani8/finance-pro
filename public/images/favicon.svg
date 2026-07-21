@@ -1,0 +1,16 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <linearGradient id="mif-tile" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#161616"/>
+            <stop offset="1" stop-color="#000000"/>
+        </linearGradient>
+        <linearGradient id="mif-gold" x1="12" y1="16" x2="52" y2="48" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#F6E27A"/>
+            <stop offset="0.5" stop-color="#D4AF37"/>
+            <stop offset="1" stop-color="#B18F27"/>
+        </linearGradient>
+    </defs>
+    <rect width="64" height="64" rx="15" fill="url(#mif-tile)"/>
+    <rect x="1" y="1" width="62" height="62" rx="14" stroke="url(#mif-gold)" stroke-opacity="0.5" stroke-width="2"/>
+    <path d="M16 46 V18.5 L32 36 L48 18.5 V46" stroke="url(#mif-gold)" stroke-width="6.5" fill="none"/>
+</svg>

@@ -34,8 +34,14 @@ class AppPanelProvider extends PanelProvider
             ->registration()
             ->profile()
             ->databaseNotifications()
+            ->brandName('Milia Invest')
+            ->brandLogo(asset('images/logo.svg'))
+            ->darkModeBrandLogo(asset('images/logo-dark.svg'))
+            ->brandLogoHeight('2.25rem')
+            ->favicon(asset('images/favicon.svg'))
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => Color::hex('#D4AF37'),
+                'gray' => Color::Zinc,
             ])
             ->tenant(Tenant::class)
             ->tenantRegistration(RegisterTenant::class)

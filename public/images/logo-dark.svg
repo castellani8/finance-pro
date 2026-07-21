@@ -1,0 +1,25 @@
+<svg width="268" height="56" viewBox="0 0 268 56" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Milia Invest">
+    <defs>
+        <linearGradient id="mid-tile" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#1D1D1D"/>
+            <stop offset="0.55" stop-color="#0E0E0E"/>
+            <stop offset="1" stop-color="#000000"/>
+        </linearGradient>
+        <linearGradient id="mid-gold" x1="12" y1="14" x2="44" y2="42" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#F6E27A"/>
+            <stop offset="0.45" stop-color="#D4AF37"/>
+            <stop offset="0.75" stop-color="#B18F27"/>
+            <stop offset="1" stop-color="#D4AF37"/>
+        </linearGradient>
+        <linearGradient id="mid-goldtext" x1="120" y1="20" x2="264" y2="40" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#F0D882"/>
+            <stop offset="1" stop-color="#C9A43A"/>
+        </linearGradient>
+    </defs>
+    <rect width="56" height="56" rx="13" fill="url(#mid-tile)"/>
+    <rect x="0.75" y="0.75" width="54.5" height="54.5" rx="12.25" stroke="url(#mid-gold)" stroke-opacity="0.65" stroke-width="1.5"/>
+    <rect x="4" y="4" width="48" height="48" rx="9.5" stroke="#D4AF37" stroke-opacity="0.2"/>
+    <path d="M15 39 V17.5 L28 31.5 L41 17.5 V39" stroke="url(#mid-gold)" stroke-width="4.4" fill="none"/>
+    <path d="M28 36.5 L30.1 38.7 L28 40.9 L25.9 38.7 Z" fill="#F6E27A"/>
+    <text x="70" y="36.5" font-family="'Instrument Sans','Inter','Segoe UI',Arial,sans-serif" font-size="22" font-weight="700" letter-spacing="2.5" fill="#FAFAF9">MILIA<tspan fill="url(#mid-goldtext)" font-weight="500" dx="8">INVEST</tspan></text>
+</svg>

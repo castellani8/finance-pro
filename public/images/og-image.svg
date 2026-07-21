@@ -1,0 +1,49 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg" font-family="'Instrument Sans','Inter','Segoe UI',Arial,sans-serif">
+    <defs>
+        <linearGradient id="ogm-bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#0C0C0C"/>
+            <stop offset="1" stop-color="#050505"/>
+        </linearGradient>
+        <radialGradient id="ogm-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1000 140) scale(560)">
+            <stop stop-color="#D4AF37" stop-opacity="0.16"/>
+            <stop offset="1" stop-color="#D4AF37" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="ogm-gold" x1="880" y1="80" x2="1160" y2="560" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#F6E27A"/>
+            <stop offset="0.5" stop-color="#D4AF37"/>
+            <stop offset="1" stop-color="#B18F27"/>
+        </linearGradient>
+        <linearGradient id="ogm-goldtext" x1="80" y1="0" x2="600" y2="0" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#F0D882"/>
+            <stop offset="1" stop-color="#C9A43A"/>
+        </linearGradient>
+    </defs>
+    <rect width="1200" height="630" fill="url(#ogm-bg)"/>
+    <rect width="1200" height="630" fill="url(#ogm-glow)"/>
+
+    <!-- moldura fina dourada -->
+    <rect x="28" y="28" width="1144" height="574" rx="18" stroke="#D4AF37" stroke-opacity="0.28" stroke-width="1.5" fill="none"/>
+    <rect x="36" y="36" width="1128" height="558" rx="14" stroke="#D4AF37" stroke-opacity="0.1" stroke-width="1" fill="none"/>
+
+    <!-- monograma M grande à direita -->
+    <g opacity="0.92">
+        <rect x="856" y="150" width="260" height="260" rx="52" fill="#0A0A0A" stroke="url(#ogm-gold)" stroke-opacity="0.6" stroke-width="4"/>
+        <rect x="872" y="166" width="228" height="228" rx="40" stroke="#D4AF37" stroke-opacity="0.15" stroke-width="2" fill="none"/>
+        <path d="M920 335 V237 L986 309 L1052 237 V335" stroke="url(#ogm-gold)" stroke-width="19" fill="none"/>
+        <path d="M986 352 L996 362 L986 372 L976 362 Z" fill="#F6E27A"/>
+    </g>
+
+    <g transform="translate(80,84)">
+        <text x="0" y="30" font-size="34" font-weight="700" letter-spacing="6" fill="#FAFAF9">MILIA <tspan fill="url(#ogm-goldtext)" font-weight="500">INVEST</tspan></text>
+        <rect x="2" y="52" width="120" height="2.5" fill="#D4AF37" opacity="0.7"/>
+    </g>
+
+    <text x="80" y="286" font-size="62" font-weight="700" letter-spacing="-1.5" fill="#FAFAF9">Todo o seu patrimônio.</text>
+    <text x="80" y="360" font-size="62" font-weight="700" letter-spacing="-1.5" fill="url(#ogm-goldtext)">Uma única visão.</text>
+    <text x="80" y="424" font-size="25" fill="#A3A3A3">Investimentos, proventos, fluxo de caixa, relatório de IR</text>
+    <text x="80" y="460" font-size="25" fill="#A3A3A3">e alertas automáticos — em um só painel.</text>
+
+    <rect x="80" y="502" width="332" height="56" rx="28" fill="url(#ogm-gold)"/>
+    <text x="112" y="538" font-size="24" font-weight="700" fill="#0A0A0A">15 dias grátis, sem cartão</text>
+    <text x="440" y="538" font-size="24" fill="#8A8A8A">depois R$ 19,90/mês</text>
+</svg>

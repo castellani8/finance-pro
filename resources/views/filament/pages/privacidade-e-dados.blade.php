@@ -21,6 +21,6 @@
     </x-filament::section>
 
     <x-filament::section heading="Aviso sobre investimentos">
-        <p style="line-height: 1.7">O Finance Pro é uma ferramenta de organização e acompanhamento. As informações exibidas <strong>não constituem recomendação de investimento</strong> nos termos da regulamentação da CVM — decisões de investimento são de sua exclusiva responsabilidade.</p>
+        <p style="line-height: 1.7">O Milia Invest é uma ferramenta de organização e acompanhamento. As informações exibidas <strong>não constituem recomendação de investimento</strong> nos termos da regulamentação da CVM — decisões de investimento são de sua exclusiva responsabilidade.</p>
     </x-filament::section>
 </x-filament-panels::page>

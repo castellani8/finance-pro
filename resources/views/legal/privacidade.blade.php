@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Política de Privacidade — Finance Pro</title>
+    <title>Política de Privacidade — Milia Invest</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 760px; margin: 0 auto; padding: 2rem 1.25rem 4rem; color: #1f2937; line-height: 1.65; }
         h1 { font-size: 1.6rem; } h2 { font-size: 1.15rem; margin-top: 2rem; }
@@ -16,7 +16,7 @@
     <h1>Política de Privacidade e Proteção de Dados</h1>
     <p class="updated">Última atualização: {{ \Illuminate\Support\Carbon::parse('2026-07-21')->locale('pt_BR')->translatedFormat('d \d\e F \d\e Y') }}</p>
 
-    <p>Esta política descreve como o <strong>Finance Pro</strong> trata seus dados pessoais, em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018 — LGPD).</p>
+    <p>Esta política descreve como o <strong>Milia Invest</strong> trata seus dados pessoais, em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018 — LGPD).</p>
 
     <h2>1. Quais dados coletamos</h2>
     <ul>
@@ -43,10 +43,10 @@
     <p>Seus dados são mantidos enquanto sua conta existir. Ao excluir a conta, todos os dados financeiros são apagados imediatamente do banco de dados de produção. Senhas usam hash bcrypt; o acesso à plataforma exige autenticação e cada carteira é isolada por tenant.</p>
 
     <h2>6. Contato</h2>
-    <p>Dúvidas sobre esta política ou solicitações relacionadas a dados pessoais: <a href="mailto:privacidade@financepro.app">privacidade@financepro.app</a>.</p>
+    <p>Dúvidas sobre esta política ou solicitações relacionadas a dados pessoais: <a href="mailto:privacidade@miliainvest.com.br">privacidade@miliainvest.com.br</a>.</p>
 
     <div class="disclaimer">
-        <strong>Aviso importante:</strong> o Finance Pro é uma ferramenta de organização e acompanhamento de investimentos. As informações exibidas <strong>não constituem recomendação, oferta ou análise de investimento</strong> nos termos da regulamentação da CVM. Decisões de investimento são de sua exclusiva responsabilidade.
+        <strong>Aviso importante:</strong> o Milia Invest é uma ferramenta de organização e acompanhamento de investimentos. As informações exibidas <strong>não constituem recomendação, oferta ou análise de investimento</strong> nos termos da regulamentação da CVM. Decisões de investimento são de sua exclusiva responsabilidade.
     </div>
 
     <p style="margin-top:2rem"><a href="{{ url('/app') }}">← Voltar para a plataforma</a></p>

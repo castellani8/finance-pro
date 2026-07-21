@@ -6,4 +6,12 @@
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+
+    /* Ouro Milia Invest — identidade preto & ouro */
+    --color-gold-200: #F5EAB8;
+    --color-gold-300: #F0D882;
+    --color-gold-400: #E2C55C;
+    --color-gold-500: #D4AF37;
+    --color-gold-600: #B18F27;
+    --color-gold-700: #8C6F1D;
 }
