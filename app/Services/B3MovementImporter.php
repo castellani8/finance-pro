@@ -199,7 +199,7 @@ class B3MovementImporter
             ],
             [
                 'asset_id' => $asset->getKey(),
-                'type' => $this->mapTransactionType($movement, $direction),
+                'type' => $this->mapTransactionType($movement, $direction, $assetType),
                 'transaction_date' => $date,
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,
@@ -327,12 +327,17 @@ class B3MovementImporter
         return false;
     }
 
-    private function mapTransactionType(string $movement, string $direction): string
+    private function mapTransactionType(string $movement, string $direction, string $assetType = 'OTHER'): string
     {
         $m = Str::upper(Str::ascii($movement));
         $isCredit = Str::upper(Str::ascii($direction)) === 'CREDITO';
 
         return match (true) {
+            // Opções têm ciclo próprio: exercício e vencimento encerram a
+            // posição (o sentido crédito/débito vem da B3 conforme a posição
+            // era comprada ou lançada).
+            $assetType === 'OPTION' && str_contains($m, 'EXERCI') => 'EXERCISE',
+            $assetType === 'OPTION' && str_contains($m, 'VENCIMENTO') => 'EXPIRE',
             str_contains($m, 'DIVIDENDO') => 'DIVIDEND',
             str_contains($m, 'JUROS SOBRE CAPITAL') => 'JCP',
             str_contains($m, 'PAGAMENTO DE JUROS') => 'INTEREST',

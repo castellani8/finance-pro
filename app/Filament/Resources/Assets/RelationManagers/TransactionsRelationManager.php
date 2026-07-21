@@ -40,6 +40,8 @@ class TransactionsRelationManager extends RelationManager
     public const TYPE_LABELS = [
         'BUY' => 'Compra',
         'SELL' => 'Venda',
+        'EXERCISE' => 'Exercício',
+        'EXPIRE' => 'Vencimento (pó)',
         'DIVIDEND' => 'Dividendo',
         'JCP' => 'JCP',
         'INCOME' => 'Rendimento',
@@ -85,6 +87,8 @@ class TransactionsRelationManager extends RelationManager
                     'REVALUATION' => 'Redefine o valor do ativo nesta data; a depreciação volta a contar daqui.',
                     'IMPROVEMENT' => 'Ex: reforma, peças, horas trabalhadas valorizadas em R$.',
                     'EXPENSE' => 'Soma ao custo investido (não altera o valor de mercado).',
+                    'EXPIRE' => 'Vencimento sem exercício: use 0 — o resultado sai do prêmio da posição.',
+                    'EXERCISE' => 'Valor na própria opção, normalmente 0 — prefira a ação "Registrar exercício" na tela do ativo, que já lança o ativo-objeto pelo strike.',
                     default => null,
                 })
                 ->numeric()
@@ -127,6 +131,7 @@ class TransactionsRelationManager extends RelationManager
                     ->color(fn (string $state): string => match ($state) {
                         'BUY', 'BONUS', 'SPLIT', 'IMPROVEMENT' => 'success',
                         'SELL', 'EXPENSE' => 'danger',
+                        'EXERCISE' => 'warning',
                         'DIVIDEND', 'JCP', 'INCOME', 'INTEREST', 'AMORTIZATION', 'FRACTION_AUCTION' => 'info',
                         'REVALUATION' => 'warning',
                         default => 'gray',
@@ -215,6 +220,15 @@ class TransactionsRelationManager extends RelationManager
             ];
         }
 
+        if ($asset->isOption()) {
+            return [
+                'BUY' => 'Compra',
+                'SELL' => 'Venda / Lançamento',
+                'EXERCISE' => 'Exercício',
+                'EXPIRE' => 'Vencimento sem valor (virou pó)',
+            ];
+        }
+
         return [
             'BUY' => 'Compra',
             'SELL' => 'Venda',
@@ -238,6 +252,13 @@ class TransactionsRelationManager extends RelationManager
         $data['direction'] = FlowDirection::defaultForType($data['type'] ?? '')->value;
         $data['quantity'] = $quantity > 0 ? $quantity : 1;
         $data['unit_price'] = $quantity > 0 ? $total / $quantity : null;
+
+        // Exercício/vencimento encerra a posição no sentido dela: comprada sai
+        // (débito), lançada volta a zero (crédito).
+        if (in_array($data['type'] ?? '', ['EXERCISE', 'EXPIRE'], true)
+            && $this->getOwnerRecord()->load('transactions')->positionQuantity() < 0) {
+            $data['direction'] = FlowDirection::Credit->value;
+        }
 
         return $data;
     }

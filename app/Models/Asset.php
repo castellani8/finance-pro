@@ -110,9 +110,12 @@ class Asset extends Model
      * Tipos de transação que movem custódia (alteram a quantidade em carteira).
      * Proventos (DIVIDEND, JCP, INCOME, INTEREST, FRACTION_AUCTION), bloqueios
      * (CUSTODY_BLOCK) e atualizações de posição da B3 (UPDATE) ficam de fora.
+     * EXERCISE e EXPIRE são o ciclo de vida de opções: encerram a posição
+     * (comprada em débito, lançada em crédito).
      */
     public const POSITION_TYPES = [
         'BUY', 'SELL', 'BONUS', 'SPLIT', 'SUBSCRIPTION', 'RIGHTS_CESSION', 'TRANSFER', 'GROUPING',
+        'EXERCISE', 'EXPIRE',
     ];
 
     /** Tipos que representam dinheiro creditado ao investidor (proventos e afins). */
@@ -154,6 +157,11 @@ class Asset extends Model
     public function isPhysical(): bool
     {
         return in_array($this->type, self::PHYSICAL_TYPES, true);
+    }
+
+    public function isOption(): bool
+    {
+        return $this->type === 'OPTION';
     }
 
     /**
@@ -248,14 +256,23 @@ class Asset extends Model
      * muda num grupamento); transferências entre corretoras são ignoradas
      * (movem custódia, não são evento econômico).
      *
-     * @return array{0: float, 1: float, 2: array<int, array{date: string, proceeds: float, cost: float, gain: float}>}
-     *                                                                                                                  [custo restante, posição, vendas realizadas]
+     * Opções também podem ficar VENDIDAS (lançamento): o prêmio recebido fica
+     * retido num pool próprio e o resultado só realiza quando a posição
+     * encerra — recompra, exercício ou vencimento. Exercício e vencimento
+     * realizam o prêmio contra zero (no exercício, a ponta no ativo-objeto
+     * entra pelo strike), o que preserva o resultado total do ciclo e mantém
+     * a apuração igual entre lançamentos manuais e importação da B3.
+     *
+     * @return array{0: float, 1: float, 2: array<int, array{date: string, proceeds: float, cost: float, gain: float}>, 3: float}
+     *                                                                                                                            [custo restante, posição, resultados realizados, prêmio vendido em aberto]
      */
     protected function costPoolAt(?string $until = null): array
     {
         $pool = 0.0;
+        $shortPool = 0.0;
         $position = 0.0;
         $sales = [];
+        $isOption = $this->isOption();
 
         foreach ($this->chronologicalTransactions() as $t) {
             $date = substr((string) $t->getRawOriginal('transaction_date'), 0, 10);
@@ -282,30 +299,90 @@ class Asset extends Model
             }
 
             if ($t->isCredit()) {
+                // Crédito encerrando posição vendida de opção (recompra,
+                // exercício ou vencimento): realiza prêmio x custo de fechar.
+                if ($isOption && $position < -1e-12) {
+                    $covered = min($quantity, -$position);
+                    $premiumRemoved = $shortPool * ($covered / -$position);
+                    $closeCost = $quantity > 0 ? $total * ($covered / $quantity) : 0.0;
+
+                    $shortPool -= $premiumRemoved;
+                    $position += $covered;
+                    $quantity -= $covered;
+                    $total -= $closeCost;
+
+                    $sales[] = [
+                        'date' => $date,
+                        'proceeds' => $premiumRemoved,
+                        'cost' => $closeCost,
+                        'gain' => $premiumRemoved - $closeCost,
+                    ];
+
+                    if ($quantity <= 1e-12) {
+                        continue;
+                    }
+                }
+
                 $position += $quantity;
                 $pool += $total;
 
                 continue;
             }
 
-            // Saída (venda, vencimento, fração...): remove custo proporcional.
+            // Débito abrindo/aumentando posição vendida de opção (lançamento):
+            // o prêmio recebido fica retido até o encerramento.
+            if ($isOption && $position <= 1e-12) {
+                $shortPool += $total;
+                $position -= $quantity;
+
+                continue;
+            }
+
+            // Saída de posição comprada (venda, exercício, vencimento,
+            // fração...): remove custo proporcional; em opções, o que exceder
+            // a posição vira lançamento.
+            $closing = $isOption ? min($quantity, $position) : $quantity;
             $removedCost = $position > 1e-12
-                ? min(1.0, $quantity / $position) * $pool
+                ? min(1.0, $closing / $position) * $pool
                 : 0.0;
             $pool -= $removedCost;
-            $position -= $quantity;
+            $position -= $closing;
+
+            $proceeds = $quantity > 0 ? $total * ($closing / $quantity) : $total;
 
             if ($t->type === 'SELL' && $total > 0) {
                 $sales[] = [
                     'date' => $date,
-                    'proceeds' => $total,
+                    'proceeds' => $proceeds,
                     'cost' => $removedCost,
-                    'gain' => $total - $removedCost,
+                    'gain' => $proceeds - $removedCost,
                 ];
+            } elseif ($isOption && in_array($t->type, ['EXERCISE', 'EXPIRE'], true)) {
+                // Opção comprada exercida ou vencida: o prêmio realiza como
+                // perda (no exercício, o ativo-objeto entra pelo strike).
+                $sales[] = [
+                    'date' => $date,
+                    'proceeds' => $proceeds,
+                    'cost' => $removedCost,
+                    'gain' => $proceeds - $removedCost,
+                ];
+            }
+
+            if ($isOption && $quantity - $closing > 1e-12) {
+                $shortPool += $total - $proceeds;
+                $position -= ($quantity - $closing);
             }
         }
 
-        return [max(0.0, $pool), $position, $sales];
+        return [max(0.0, $pool), $position, $sales, max(0.0, $shortPool)];
+    }
+
+    /** Prêmio recebido (BRL) das posições vendidas de opção ainda em aberto. */
+    public function openShortPremium(?string $until = null): float
+    {
+        [, , , $shortPool] = $this->costPoolAt($until);
+
+        return $shortPool;
     }
 
     /**
@@ -330,8 +407,13 @@ class Asset extends Model
      */
     public function averageBuyPrice(?string $until = null): float
     {
-        [$pool] = $this->costPoolAt($until);
+        [$pool, , , $shortPool] = $this->costPoolAt($until);
         $position = $this->positionQuantity($until);
+
+        // Posição vendida (opções lançadas): o "preço médio" é o prêmio médio recebido.
+        if ($position < 0) {
+            return $this->isOption() ? $shortPool / -$position : 0.0;
+        }
 
         if ($position <= 0) {
             return 0.0;
@@ -579,13 +661,22 @@ class Asset extends Model
             return $this->physicalValueAt();
         }
 
+        $quantity = $this->positionQuantity();
         $price = $this->currentUnitPrice();
+
+        // Posição vendida (opções lançadas) é passivo: negativo pelo mercado
+        // ou, sem cotação, pelo prêmio em aberto.
+        if ($this->isOption() && $quantity < 0) {
+            return $price !== null
+                ? $this->toBrlAt($quantity * $price)
+                : -$this->openShortPremium();
+        }
 
         if ($price === null) {
             return $this->purchaseValue();
         }
 
-        return $this->toBrlAt($this->positionQuantity() * $price);
+        return $this->toBrlAt($quantity * $price);
     }
 
     /**
@@ -717,6 +808,13 @@ class Asset extends Model
 
         $quantity = $this->positionQuantity($date);
 
+        // Posição vendida (opções lançadas): passivo na data.
+        if ($this->isOption() && $quantity < 0) {
+            return $price !== null
+                ? $this->toBrlAt($quantity * $price, $date)
+                : -$this->openShortPremium($date);
+        }
+
         if ($quantity <= 0) {
             return 0.0;
         }
@@ -847,5 +945,20 @@ class Asset extends Model
     public function scopeWherePositionPositive(Builder $query): Builder
     {
         return $query->where($query->qualifyColumn('position_quantity'), '>', 0);
+    }
+
+    /**
+     * Posições em aberto para a listagem: quantidade positiva ou, no caso de
+     * opções, também as vendidas/lançadas (quantidade negativa).
+     */
+    public function scopeWhereOpenPosition(Builder $query): Builder
+    {
+        $column = $query->qualifyColumn('position_quantity');
+
+        return $query->where(fn (Builder $q) => $q
+            ->where($column, '>', 0)
+            ->orWhere(fn (Builder $inner) => $inner
+                ->where($inner->qualifyColumn('type'), 'OPTION')
+                ->where($column, '<', 0)));
     }
 }

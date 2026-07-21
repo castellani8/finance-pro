@@ -77,7 +77,8 @@ class AssetsTable
                         };
                     })
                     ->placeholder('—')
-                    ->visible(fn ($livewire): bool => ($livewire->activeTab ?? null) === 'fixed_income'),
+                    // Vencimento importa tanto para renda fixa quanto para opções.
+                    ->visible(fn ($livewire): bool => in_array($livewire->activeTab ?? null, ['fixed_income', 'option'], true)),
                 TextColumn::make('depreciation_rate')
                     ->label('Depreciação')
                     ->badge()
@@ -152,7 +153,9 @@ class AssetsTable
                     ->label('Quantidade')
                     ->alignEnd()
                     ->getStateUsing(fn (Asset $record): float => $record->positionQuantity())
-                    ->formatStateUsing(fn (float $state): string => rtrim(rtrim(number_format($state, 6, ',', '.'), '0'), ','))
+                    ->formatStateUsing(fn (float $state): string => rtrim(rtrim(number_format($state, 6, ',', '.'), '0'), ',')
+                        .($state < 0 ? ' (lançada)' : ''))
+                    ->color(fn (float $state): ?string => $state < 0 ? 'danger' : null)
                     // Bens físicos são normalmente unitários; a quantidade fica no extrato.
                     ->visible(fn ($livewire): bool => ($livewire->activeTab ?? null) !== 'physical')
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('position_quantity', $direction)),
@@ -285,10 +288,10 @@ class AssetsTable
             ]);
     }
 
-    /** Colunas de renda variável só aparecem nas tabs de Ações e FIIs. */
+    /** Colunas de renda variável só aparecem nas tabs de Ações, FIIs e Opções. */
     private static function isVariableIncomeTab($livewire): bool
     {
-        return in_array($livewire->activeTab ?? null, ['stock', 'fii'], true);
+        return in_array($livewire->activeTab ?? null, ['stock', 'fii', 'option'], true);
     }
 
     /**

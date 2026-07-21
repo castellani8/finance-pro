@@ -75,6 +75,8 @@ class ListAssets extends ListRecords
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('type', 'FII')),
             'fixed_income' => Tab::make('Renda Fixa')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('type', 'FIXED_INCOME')),
+            'option' => Tab::make('Opções')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('type', 'OPTION')),
             'physical' => Tab::make('Patrimônio')
                 ->modifyQueryUsing(fn (Builder $query) => $query->whereIn('type', Asset::PHYSICAL_TYPES)),
         ];

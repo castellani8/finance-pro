@@ -66,6 +66,7 @@ class AssetForm
                             ->placeholder(fn (Get $get): string => match (true) {
                                 in_array($get('type'), Asset::PHYSICAL_TYPES, true) => 'Ex: Trator John Deere 6110J, Galpão Rod. BR-050',
                                 $get('type') === 'FIXED_INCOME' => 'Ex: CDB Banco X 110% CDI',
+                                $get('type') === 'OPTION' => 'Ex: Call PETR4 R$ 32,50 Jun/2026',
                                 default => 'Ex: PETROBRAS PN',
                             })
                             ->required()
@@ -86,7 +87,15 @@ class AssetForm
                                 ->where('ticker', $value)->first()?->label() ?? (string) $value)
                             ->helperText('Escolha da lista de tickers negociáveis — é ele que liga o ativo às cotações.')
                             ->required(fn (Get $get): bool => in_array($get('type'), self::LISTED_TYPES, true))
-                            ->visible(fn (Get $get): bool => in_array($get('type'), [...self::LISTED_TYPES, 'OPTION'], true)),
+                            ->visible(fn (Get $get): bool => in_array($get('type'), self::LISTED_TYPES, true)),
+                        TextInput::make('ticker_or_code')
+                            ->label('Código da série')
+                            ->placeholder('Ex: PETRR250')
+                            ->helperText('Código da opção na B3 — digite livremente; séries de opções não constam no catálogo de tickers.')
+                            ->maxLength(50)
+                            ->required()
+                            ->dehydrateStateUsing(fn (?string $state): ?string => filled($state) ? mb_strtoupper(trim($state)) : null)
+                            ->visible(fn (Get $get): bool => $get('type') === 'OPTION'),
                         TextInput::make('ticker_or_code')
                             ->label('Código do título')
                             ->placeholder('Ex: CDB123ABC45')
@@ -206,6 +215,44 @@ class AssetForm
                             ->label('Vencimento')
                             ->type('date')
                             ->helperText('Opcional — apenas informativo por enquanto.'),
+                    ]),
+
+                Section::make('Dados da opção')
+                    ->description('Características do contrato — identificam a série e servirão de base para exercício e vencimento.')
+                    ->columns(2)
+                    ->visible(fn (Get $get): bool => $get('type') === 'OPTION')
+                    ->schema([
+                        Select::make('metadata.underlying')
+                            ->label('Ativo-objeto')
+                            ->searchable()
+                            ->getSearchResultsUsing(fn (string $search): array => B3ListedTicker::query()
+                                ->where(fn ($query) => $query
+                                    ->where('ticker', 'like', mb_strtoupper($search).'%')
+                                    ->orWhere('name', 'like', "%{$search}%"))
+                                ->orderBy('ticker')
+                                ->limit(50)
+                                ->get()
+                                ->mapWithKeys(fn (B3ListedTicker $t): array => [$t->ticker => $t->label()])
+                                ->all())
+                            ->getOptionLabelUsing(fn ($value): string => B3ListedTicker::query()
+                                ->where('ticker', $value)->first()?->label() ?? (string) $value)
+                            ->helperText('Ação ou FII sobre o qual a opção foi lançada.'),
+                        Select::make('metadata.option_type')
+                            ->label('Tipo de contrato')
+                            ->native(false)
+                            ->options([
+                                'CALL' => 'Call (opção de compra)',
+                                'PUT' => 'Put (opção de venda)',
+                            ]),
+                        TextInput::make('metadata.strike')
+                            ->label('Strike (preço de exercício)')
+                            ->numeric()
+                            ->minValue(0)
+                            ->prefix(fn (Get $get): string => CurrencyConverter::symbol($get('currency'))),
+                        TextInput::make('metadata.due_date')
+                            ->label('Vencimento')
+                            ->type('date')
+                            ->helperText('Data de vencimento da série.'),
                     ]),
 
                 Section::make('Observações')

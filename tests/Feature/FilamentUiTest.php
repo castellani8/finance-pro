@@ -74,6 +74,43 @@ class FilamentUiTest extends TestCase
         $this->assertEqualsWithDelta(17000.0, $conta->fresh()->load('transactions')->balance(), 1e-6);
     }
 
+    public function test_cadastro_de_opcao_aceita_codigo_livre_e_guarda_os_dados_do_contrato(): void
+    {
+        Livewire::test(CreateAsset::class)
+            ->fillForm([
+                'type' => 'OPTION',
+                'name' => 'Call PETR4 R$ 32,50 Jun/2026',
+                'ticker_or_code' => 'petrr250',
+                'metadata.underlying' => 'PETR4',
+                'metadata.option_type' => 'CALL',
+                'metadata.strike' => 32.50,
+                'metadata.due_date' => '2026-06-19',
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $opcao = Asset::where('type', 'OPTION')->firstOrFail();
+
+        // O código da série é digitado livremente e normalizado para maiúsculas.
+        $this->assertSame('PETRR250', $opcao->ticker_or_code);
+        $this->assertSame('PETR4', $opcao->metadata['underlying']);
+        $this->assertSame('CALL', $opcao->metadata['option_type']);
+        $this->assertEqualsWithDelta(32.50, (float) $opcao->metadata['strike'], 1e-6);
+        $this->assertSame('2026-06-19', $opcao->metadata['due_date']);
+    }
+
+    public function test_cadastro_de_opcao_exige_o_codigo_da_serie(): void
+    {
+        Livewire::test(CreateAsset::class)
+            ->fillForm([
+                'type' => 'OPTION',
+                'name' => 'Call sem código',
+                'ticker_or_code' => null,
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['ticker_or_code' => 'required']);
+    }
+
     public function test_listagem_de_ativos_mostra_o_bem_na_tab_patrimonio(): void
     {
         $this->makeAssetWithBuy('Trator John Deere', 'MACHINERY', 100000);

@@ -113,8 +113,9 @@ class IrReport
     /**
      * Apuração simplificada de ganho de capital em renda variável, mês a mês:
      * ações têm isenção quando as vendas do mês ficam até R$ 20 mil (15% sobre
-     * o ganho acima disso); FIIs pagam 20% sempre; prejuízos compensam ganhos
-     * dos meses seguintes da mesma classe. Operações day-trade não são separadas.
+     * o ganho acima disso); FIIs pagam 20% sempre; opções pagam 15% sem
+     * qualquer isenção; prejuízos compensam ganhos dos meses seguintes da
+     * mesma classe. Operações day-trade não são separadas.
      *
      * @param  Collection<int, Asset>  $assets
      * @return array<int, array<string, mixed>>
@@ -124,6 +125,7 @@ class IrReport
         $classes = [
             'acoes' => ['types' => ['STOCK'], 'rate' => 0.15, 'exemption' => 20000.0],
             'fiis' => ['types' => ['FII'], 'rate' => 0.20, 'exemption' => 0.0],
+            'opcoes' => ['types' => ['OPTION'], 'rate' => 0.15, 'exemption' => 0.0],
         ];
 
         $monthly = [];
@@ -140,7 +142,7 @@ class IrReport
 
         ksort($monthly);
 
-        $carryLoss = ['acoes' => 0.0, 'fiis' => 0.0];
+        $carryLoss = ['acoes' => 0.0, 'fiis' => 0.0, 'opcoes' => 0.0];
         $rows = [];
 
         foreach ($monthly as $month => $byClass) {
@@ -259,7 +261,8 @@ class IrReport
 
     /**
      * Total vendido por mês, separado por classe — em ações, vendas até
-     * R$ 20 mil no mês são isentas de ganho de capital (FIIs não têm isenção).
+     * R$ 20 mil no mês são isentas de ganho de capital (FIIs e opções não
+     * têm isenção).
      *
      * @param  Collection<int, Asset>  $assets
      * @return array<int, array<string, mixed>>
@@ -282,6 +285,7 @@ class IrReport
                 $bucket = match ($asset->type) {
                     'STOCK' => 'acoes',
                     'FII' => 'fiis',
+                    'OPTION' => 'opcoes',
                     default => 'outros',
                 };
 
@@ -301,6 +305,7 @@ class IrReport
                 'mes' => $month,
                 'acoes' => $acoes,
                 'fiis' => round($totals['fiis'] ?? 0.0, 2),
+                'opcoes' => round($totals['opcoes'] ?? 0.0, 2),
                 'outros' => round($totals['outros'] ?? 0.0, 2),
                 'acoes_acima_isencao' => $acoes > 20000,
             ];
@@ -314,6 +319,7 @@ class IrReport
         return match ($asset->type) {
             'STOCK' => '03 / 01 — Ações',
             'FII' => '07 / 03 — Fundos imobiliários',
+            'OPTION' => '04 / 99 — Outras aplicações e investimentos',
             'FIXED_INCOME' => str_starts_with((string) $asset->ticker_or_code, 'CDB')
                 ? '04 / 02 — CDB/RDB'
                 : '04 / 03 — Demais títulos',
@@ -337,6 +343,7 @@ class IrReport
         return match ($asset->type) {
             'STOCK' => "{$qty} ações de {$asset->name} ({$asset->ticker_or_code}), custo total de aquisição {$money}.{$custodia}",
             'FII' => "{$qty} cotas do fundo imobiliário {$asset->name} ({$asset->ticker_or_code}), custo total de aquisição {$money}.{$custodia}",
+            'OPTION' => "{$qty} opções {$asset->name} ({$asset->ticker_or_code}), prêmio/custo total {$money}.{$custodia}",
             'FIXED_INCOME' => "Aplicação em {$asset->name}, custo de aquisição {$money}.{$custodia}",
             'VEHICLE', 'MACHINERY', 'REAL_ESTATE', 'COMMODITY', 'COLLECTIBLE', 'SOFTWARE' => ucfirst(mb_strtolower(Asset::TYPE_LABELS[$asset->type])).": {$asset->name}, custo total de aquisição (com benfeitorias e despesas) {$money}.{$empresa}",
             default => "{$qty} unidades de {$asset->name}, custo total de aquisição {$money}.{$custodia}",

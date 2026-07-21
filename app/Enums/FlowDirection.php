@@ -26,10 +26,14 @@ enum FlowDirection: string
         };
     }
 
-    /** Sentido natural de um lançamento manual do tipo (venda e despesa saem). */
+    /**
+     * Sentido natural de um lançamento manual do tipo (venda e despesa saem;
+     * exercício/vencimento de opção assume posição comprada — quem tiver
+     * posição lançada inverte para crédito no formulário).
+     */
     public static function defaultForType(string $type): self
     {
-        return in_array($type, ['SELL', 'EXPENSE'], true) ? self::Debit : self::Credit;
+        return in_array($type, ['SELL', 'EXPENSE', 'EXERCISE', 'EXPIRE'], true) ? self::Debit : self::Credit;
     }
 
     public function isCredit(): bool

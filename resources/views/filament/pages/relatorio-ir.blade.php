@@ -105,7 +105,7 @@
         </div>
     </x-filament::section>
 
-    <x-filament::section heading="Vendas por mês" description="Vendas de ações até R$ 20.000,00 no mês são isentas de ganho de capital. FIIs não têm isenção.">
+    <x-filament::section heading="Vendas por mês" description="Vendas de ações até R$ 20.000,00 no mês são isentas de ganho de capital. FIIs e opções não têm isenção.">
         <div style="overflow-x: auto">
             <table class="ir-table">
                 <thead>
@@ -113,6 +113,7 @@
                         <th>Mês</th>
                         <th class="num">Ações</th>
                         <th class="num">FIIs</th>
+                        <th class="num">Opções</th>
                         <th class="num">Outros / Resgates</th>
                         <th></th>
                     </tr>
@@ -123,18 +124,19 @@
                             <td>{{ $meses[$venda['mes']] }}</td>
                             <td class="num">{{ $money($venda['acoes']) }}</td>
                             <td class="num">{{ $money($venda['fiis']) }}</td>
+                            <td class="num">{{ $money($venda['opcoes']) }}</td>
                             <td class="num">{{ $money($venda['outros']) }}</td>
                             <td>@if ($venda['acoes_acima_isencao'])<span class="ir-badge">acima da isenção — apurar ganho</span>@endif</td>
                         </tr>
                     @empty
-                        <tr><td colspan="5">Nenhuma venda em {{ $report['year'] }}.</td></tr>
+                        <tr><td colspan="6">Nenhuma venda em {{ $report['year'] }}.</td></tr>
                     @endforelse
                 </tbody>
             </table>
         </div>
     </x-filament::section>
 
-    <x-filament::section heading="Ganho de capital e DARF (renda variável)" description="Vendas x custo pelo método do pool. Ações: isenção quando as vendas do mês ficam até R$ 20 mil; FIIs: 20% sempre. Prejuízos compensam ganhos dos meses seguintes.">
+    <x-filament::section heading="Ganho de capital e DARF (renda variável)" description="Vendas x custo pelo método do pool. Ações: isenção quando as vendas do mês ficam até R$ 20 mil; FIIs: 20% sempre; opções: 15% sem isenção. Prejuízos compensam ganhos dos meses seguintes.">
         <div style="overflow-x: auto">
             <table class="ir-table">
                 <thead>
@@ -145,6 +147,8 @@
                         <th class="num">DARF ações</th>
                         <th class="num">Ganho FIIs</th>
                         <th class="num">DARF FIIs</th>
+                        <th class="num">Ganho opções</th>
+                        <th class="num">DARF opções</th>
                         <th class="num">DARF total</th>
                     </tr>
                 </thead>
@@ -157,16 +161,18 @@
                             <td class="num">{{ $money($ganho['acoes']['darf']) }}</td>
                             <td class="num" style="{{ $ganho['fiis']['ganho'] < 0 ? 'color:#ef4444' : '' }}">{{ $money($ganho['fiis']['ganho']) }}</td>
                             <td class="num">{{ $money($ganho['fiis']['darf']) }}</td>
+                            <td class="num" style="{{ $ganho['opcoes']['ganho'] < 0 ? 'color:#ef4444' : '' }}">{{ $money($ganho['opcoes']['ganho']) }}</td>
+                            <td class="num">{{ $money($ganho['opcoes']['darf']) }}</td>
                             <td class="num" style="font-weight:700">{{ $money($ganho['darf']) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="7">Nenhuma venda de renda variável em {{ $report['year'] }}.</td></tr>
+                        <tr><td colspan="9">Nenhuma venda de renda variável em {{ $report['year'] }}.</td></tr>
                     @endforelse
                 </tbody>
                 @if ($report['ganhos'] !== [])
                     <tfoot>
                         <tr style="font-weight: 700">
-                            <td colspan="6">DARF total do ano</td>
+                            <td colspan="8">DARF total do ano</td>
                             <td class="num">{{ $money($report['totais']['darf']) }}</td>
                         </tr>
                     </tfoot>

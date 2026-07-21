@@ -46,7 +46,8 @@ class AssetResource extends Resource
         // viria antes de qualquer ordenação escolhida pelo usuário e a anularia.
         return parent::getEloquentQuery()
             ->where('tenant_id', Filament::getTenant()->id)
-            ->wherePositionPositive()
+            // Posições vendidas de opções (quantidade negativa) também aparecem.
+            ->whereOpenPosition()
             ->with('transactions');
     }
 
