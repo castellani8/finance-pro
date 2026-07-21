@@ -5,6 +5,7 @@ namespace App\Filament\Auth;
 use App\Filament\Auth\Concerns\HasPhoneFormComponents;
 use App\Support\PhoneCountry;
 use Filament\Auth\Pages\EditProfile as BaseEditProfile;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -23,6 +24,17 @@ class EditProfile extends BaseEditProfile
     public function getTitle(): string
     {
         return 'Meu perfil';
+    }
+
+    public function mount(): void
+    {
+        // A rota do perfil fica fora do escopo do tenant, mas o layout
+        // completo (sidebar, menu de tenant) precisa de um tenant ativo.
+        if (Filament::getTenant() === null) {
+            Filament::setTenant($this->getUser()->tenants->first(), isQuiet: true);
+        }
+
+        parent::mount();
     }
 
     public function form(Schema $schema): Schema
