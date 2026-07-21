@@ -21,6 +21,8 @@ class RegisterTenant extends BaseRegisterTenant
             TextInput::make('name')
                 ->label('Nome da carteira')
                 ->placeholder('Ex: Minha carteira, Família Silva')
+                ->helperText('A carteira agrupa suas contas, ativos e lançamentos. Você pode criar outras depois — por exemplo, uma para a família e outra para a empresa.')
+                ->autofocus()
                 ->required()
                 ->maxLength(100),
         ]);
