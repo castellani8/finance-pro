@@ -3,6 +3,7 @@
 namespace App\Filament\Auth;
 
 use App\Filament\Auth\Concerns\HasPhoneFormComponents;
+use App\Models\Subscription;
 use App\Support\PhoneCountry;
 use Filament\Auth\Pages\Register as BaseRegister;
 use Filament\Schemas\Schema;
@@ -37,6 +38,10 @@ class Register extends BaseRegister
 
         unset($data['phone_country'], $data['phone_number']);
 
-        return parent::handleRegistration($data);
+        $user = parent::handleRegistration($data);
+
+        Subscription::startTrialFor($user);
+
+        return $user;
     }
 }

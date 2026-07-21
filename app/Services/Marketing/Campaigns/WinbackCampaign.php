@@ -38,6 +38,12 @@ class WinbackCampaign extends Campaign
 
     public function appliesTo(User $user): bool
     {
+        // Quem perdeu o acesso já foi tratado pelo funil de conversão;
+        // winback é para quem PODE usar o painel mas esfriou.
+        if (! $user->hasPanelAccess()) {
+            return false;
+        }
+
         $lastActivity = Activity::query()
             ->where('causer_type', $user->getMorphClass())
             ->where('causer_id', $user->getKey())

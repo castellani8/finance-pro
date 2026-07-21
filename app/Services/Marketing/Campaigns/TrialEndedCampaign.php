@@ -2,12 +2,15 @@
 
 namespace App\Services\Marketing\Campaigns;
 
+use App\Enums\SubscriptionStatus;
 use App\Models\User;
 use App\Services\Marketing\Campaign;
+use Carbon\CarbonInterface;
 
 /**
- * Dia seguinte ao fim do trial — última mensagem do funil de conversão,
- * lembrando que os dados continuam guardados e o retorno é de um clique.
+ * Logo após o trial expirar (assinatura em "expired") — última mensagem do
+ * funil de conversão, lembrando que os dados continuam guardados. Enviada em
+ * até 3 dias após a expiração; depois disso o winback assume.
  */
 class TrialEndedCampaign extends Campaign
 {
@@ -19,6 +22,19 @@ class TrialEndedCampaign extends Campaign
     public function dueDay(): int
     {
         return (int) config('landing.plan.trial_days') + 1;
+    }
+
+    public function isDue(User $user, CarbonInterface $now): bool
+    {
+        $subscription = $user->subscription;
+
+        if ($subscription === null || $subscription->status !== SubscriptionStatus::Expired) {
+            return false;
+        }
+
+        $daysSinceEnd = (int) $subscription->trial_ends_at->startOfDay()->diffInDays($now->copy()->startOfDay());
+
+        return $daysSinceEnd >= 0 && $daysSinceEnd <= 3;
     }
 
     public function subject(User $user): string

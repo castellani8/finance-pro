@@ -26,3 +26,9 @@ Schedule::command('ledger:generate-recurring')->dailyAt('00:30');
 
 // Alertas diários: vencimentos, contratos terminando, cotações velhas, contas negativas.
 Schedule::command('portfolio:notify-alerts')->dailyAt('08:00');
+
+// Assinaturas: expira trials vencidos antes da régua de e-mails rodar.
+Schedule::command('subscriptions:sync-status')->dailyAt('09:00');
+
+// Régua de e-mail marketing: uma campanha por usuário por dia, no máximo.
+Schedule::command('marketing:send-campaigns')->dailyAt('09:30');
