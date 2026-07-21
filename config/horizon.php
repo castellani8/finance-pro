@@ -214,10 +214,39 @@ return [
 
     'environments' => [
         'production' => [
-            'supervisor-1' => [
-                'maxProcesses' => 10,
+
+            'supervisor-fast' => [
+                'connection' => 'redis',
+                'queue' => ['default'],
+                'balance' => 'auto',
+                'maxProcesses' => 2,
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
+                'tries' => 3,
+                'backoff' => [5, 30, 120],
+                'timeout' => 60,
+            ],
+
+            'supervisor-emails' => [
+                'connection' => 'redis',
+                'queue' => ['emails'],
+                'balance' => 'auto',
+                'maxProcesses' => 1,
+                'balanceMaxShift' => 1,
+                'balanceCooldown' => 3,
+                'tries' => 3,
+                'backoff' => [10, 30, 120],
+                'timeout' => 120,
+            ],
+
+            'supervisor-heavy' => [
+                'connection' => 'redis',
+                'queue' => ['heavy'],
+                'balance' => 'simple',
+                'maxProcesses' => 1,
+                'tries' => 2,
+                'backoff' => [10, 60],
+                'timeout' => 300,
             ],
         ],
 
