@@ -23,7 +23,13 @@
 
                 <div class="text-center">
                     <h3 class="text-lg font-semibold text-white">Milia Invest completo</h3>
-                    <div class="mt-4 flex items-baseline justify-center gap-1">
+                    @if ($originalPrice = config('landing.plan.original_price'))
+                        <div class="mt-4 flex items-center justify-center gap-2">
+                            <span class="text-lg font-medium text-neutral-500 line-through decoration-neutral-500/70">de R$ {{ $originalPrice }}</span>
+                            <span class="rounded-full bg-gold-500/15 px-3 py-1 text-xs font-bold tracking-wide text-gold-400 uppercase">Oferta por tempo limitado</span>
+                        </div>
+                    @endif
+                    <div class="{{ config('landing.plan.original_price') ? 'mt-1' : 'mt-4' }} flex items-baseline justify-center gap-1">
                         <span class="text-xl font-medium text-neutral-400">R$</span>
                         <span class="text-6xl font-bold tracking-tight text-white">{{ config('landing.plan.price') }}</span>
                         <span class="text-lg text-neutral-400">/mês</span>
