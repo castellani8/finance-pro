@@ -22,7 +22,7 @@ use App\Filament\Resources\Proventos\Pages\ListProventos;
 use App\Filament\Resources\Recorrencias\Pages\ListRecorrencias;
 use App\Filament\Widgets\AllocationChart;
 use App\Filament\Widgets\CashFlowChart;
-use App\Filament\Widgets\GettingStarted;
+use App\Filament\Widgets\Onboarding;
 use App\Filament\Widgets\MonthlyIncomeChart;
 use App\Filament\Widgets\PortfolioEvolutionChart;
 use App\Models\Account;
@@ -158,7 +158,7 @@ class PanelRenderSweepTest extends TestCase
             MonthlyIncomeChart::class,
             AllocationChart::class,
             CashFlowChart::class,
-            GettingStarted::class,
+            Onboarding::class,
             PassiveIncomeStats::class,
             PassiveIncomeChart::class,
         ];

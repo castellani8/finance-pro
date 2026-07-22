@@ -7,6 +7,7 @@ use App\Filament\Auth\Register;
 use App\Filament\Pages\Tenancy\RegisterTenant;
 use App\Http\Middleware\EnsureSubscriptionIsActive;
 use App\Models\Tenant;
+use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -18,6 +19,7 @@ use Filament\Support\Colors\Color;
 use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -54,6 +56,16 @@ class AppPanelProvider extends PanelProvider
             ->renderHook(
                 PanelsRenderHook::FOOTER,
                 fn (): View => view('filament.footer-disclaimer'),
+            )
+            // Milha, a assistente de IA: balão flutuante em todas as telas
+            // autenticadas com tenant resolvido.
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn (): string => auth()->check() && Filament::getTenant() !== null
+                    ? Blade::render('@livewire(\'milha-chat\', [\'tenantId\' => $tenantId])', [
+                        'tenantId' => Filament::getTenant()->getKey(),
+                    ])
+                    : '',
             )
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             // O Dashboard custom (com filtro por empresa) é descoberto em

@@ -33,6 +33,7 @@
 
                 <ul class="mt-8 space-y-3 text-sm text-neutral-300">
                     @foreach ([
+                        'Milha, a assistente de IA — registre e consulte tudo por conversa',
                         'Ativos ilimitados em todas as classes',
                         'Cotações da B3 e câmbio atualizados diariamente',
                         'Renda passiva, fluxo de caixa e recorrências',

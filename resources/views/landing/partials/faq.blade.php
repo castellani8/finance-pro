@@ -16,6 +16,10 @@
                     'a' => 'Ações e opções da B3, fundos imobiliários, renda fixa, ouro e commodities, imóveis, veículos, máquinas, softwares e até colecionáveis. Ativos negociados em bolsa têm cotação atualizada automaticamente; os demais você avalia como preferir.',
                 ],
                 [
+                    'q' => 'O que a Milha, a assistente de IA, consegue fazer?',
+                    'a' => 'Você conversa com ela em português normal: "comprei 2 PETR4 a R$ 40 ontem", "quanto recebi de FIIs esse ano?", "assino Netflix, vence dia 10". Ela registra operações, despesas, recorrências, contas e ativos (sempre pedindo sua confirmação antes), responde perguntas com os seus números reais e desenha gráficos na própria conversa. Ela nunca recomenda investimentos.',
+                ],
+                [
                     'q' => 'Meus dados financeiros estão seguros?',
                     'a' => 'Sim. Seus dados ficam isolados na sua conta, com registro de auditoria de todas as alterações. Em conformidade com a LGPD, você pode exportar ou excluir tudo a qualquer momento na página "Privacidade e dados".',
                 ],

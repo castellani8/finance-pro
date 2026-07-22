@@ -32,8 +32,8 @@
             </div>
 
             <ul class="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-neutral-400">
+                <li class="flex items-center gap-1.5"><span class="text-gold-400">✓</span> Milha, assistente de IA que anota tudo por você</li>
                 <li class="flex items-center gap-1.5"><span class="text-gold-400">✓</span> Cotações da B3 e câmbio automáticos</li>
-                <li class="flex items-center gap-1.5"><span class="text-gold-400">✓</span> Comparação com CDI e IBOV</li>
                 <li class="flex items-center gap-1.5"><span class="text-gold-400">✓</span> Relatório pronto para o IR</li>
             </ul>
         </div>

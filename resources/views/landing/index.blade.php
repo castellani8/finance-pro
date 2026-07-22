@@ -29,6 +29,7 @@
     <main>
         @include('landing.partials.hero')
         @include('landing.partials.pains')
+        @include('landing.partials.milha')
         @include('landing.partials.features')
         @include('landing.partials.how-it-works')
         @include('landing.partials.pricing')
@@ -37,5 +38,8 @@
     </main>
 
     @include('landing.partials.footer')
+
+    {{-- Milha vendedora: chat de dúvidas que conduz ao cadastro --}}
+    @livewire('milha-vendedora-chat')
 </body>
 </html>

@@ -8,12 +8,13 @@ use Tests\TestCase;
 class ExampleTest extends TestCase
 {
     /**
-     * A raiz redireciona para o painel Filament.
+     * A raiz serve a landing page pública.
      */
     public function test_the_application_returns_a_successful_response(): void
     {
         $response = $this->get('/');
 
-        $response->assertRedirect('/app');
+        $response->assertOk();
+        $response->assertSee('Milia Invest');
     }
 }
