@@ -262,6 +262,23 @@ class AssetForm
                             ->helperText('Data de vencimento da série.'),
                     ]),
 
+                Section::make('Tese de investimento')
+                    ->description('Por que você está comprando (ou mantendo) este ativo? Quando o preço testar sua convicção, a Milia te lembra do que você escreveu aqui.')
+                    ->collapsed(fn (string $operation): bool => $operation === 'edit')
+                    ->schema([
+                        Textarea::make('metadata.thesis')
+                            ->label('Minha tese')
+                            ->hiddenLabel()
+                            ->rows(3)
+                            ->placeholder('Ex: FII de logística com contratos longos; comprei pelo yield acima de 9% e vacância baixa. Vendo se a vacância passar de 15%.')
+                            ->helperText(fn ($record): ?string => filled($record?->metadata['thesis_recorded_at'] ?? null)
+                                ? 'Registrada em '.\Illuminate\Support\Carbon::parse($record->metadata['thesis_recorded_at'])->format('d/m/Y')
+                                    .(is_numeric($record->metadata['thesis_price'] ?? null)
+                                        ? ', com o ativo a R$ '.number_format((float) $record->metadata['thesis_price'], 2, ',', '.')
+                                        : '')
+                                : null),
+                    ]),
+
                 Section::make('Observações')
                     ->collapsed()
                     ->schema([

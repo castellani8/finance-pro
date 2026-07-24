@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Controllers\CartaPatrimonioController;
+use App\Http\Controllers\ContadorReportController;
+use App\Http\Controllers\ConviteController;
 use App\Http\Controllers\EmailPixelController;
 use App\Http\Controllers\MarketingEmailController;
 use App\Http\Controllers\Webhooks\SubscriptionWebhookController;
@@ -31,3 +34,21 @@ Route::get('/email/pixel/{emailLog}', [EmailPixelController::class, 'read'])
 Route::post('/webhooks/{gateway}', [SubscriptionWebhookController::class, 'handle'])
     ->withoutMiddleware(PreventRequestForgery::class)
     ->name('webhooks.subscription');
+
+// Relatório de IR somente-leitura para o contador — link assinado temporário
+// gerado pelo dono da carteira na página Relatório IR do painel.
+Route::get('/r/ir/{tenant:uuid}/{year}', [ContadorReportController::class, 'show'])
+    ->middleware('signed')
+    ->whereNumber('year')
+    ->name('contador.ir');
+
+// Convite para participar de uma carteira (modo família): o GET mostra o
+// convite; o POST aceita (exige usuário logado no painel).
+Route::get('/convite/{token}', [ConviteController::class, 'show'])->name('convite.aceitar');
+Route::post('/convite/{token}', [ConviteController::class, 'accept'])->name('convite.confirmar');
+
+// Carta de patrimônio (documento de sucessão, versão para impressão) —
+// restrita a usuários autenticados que pertencem ao tenant.
+Route::get('/carta-patrimonio/{tenant:uuid}', [CartaPatrimonioController::class, 'show'])
+    ->middleware('auth')
+    ->name('carta.patrimonio');

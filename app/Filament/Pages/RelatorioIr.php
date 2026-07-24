@@ -56,6 +56,21 @@ class RelatorioIr extends Page
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('shareContador')
+                ->label('Compartilhar com contador')
+                ->icon('heroicon-o-link')
+                ->color('gray')
+                ->modalHeading('Link para o contador')
+                ->modalDescription('Um relatório somente leitura, sem acesso ao restante do painel.')
+                ->modalSubmitAction(false)
+                ->modalCancelActionLabel('Fechar')
+                ->modalContent(fn () => view('filament.modals.contador-link', [
+                    'year' => (int) $this->year,
+                    'url' => \Illuminate\Support\Facades\URL::temporarySignedRoute('contador.ir', now()->addDays(45), [
+                        'tenant' => Filament::getTenant()->uuid,
+                        'year' => (int) $this->year,
+                    ]),
+                ])),
             Action::make('exportCsv')
                 ->label('Baixar CSV')
                 ->icon('heroicon-o-arrow-down-tray')

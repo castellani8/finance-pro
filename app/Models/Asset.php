@@ -154,6 +154,34 @@ class Asset extends Model
         'REAL_ESTATE' => 4.0,
     ];
 
+    /**
+     * Diário de tese: quando a tese é escrita ou reescrita, fotografa a data e
+     * o preço da época — é contra esse preço que o alerta "revisite sua tese"
+     * compara depois.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (Asset $asset): void {
+            $meta = $asset->metadata ?? [];
+            $thesis = trim((string) ($meta['thesis'] ?? ''));
+            $original = trim((string) (($asset->getOriginal('metadata')['thesis'] ?? '')));
+
+            if ($thesis !== '' && $thesis !== $original) {
+                $meta['thesis_recorded_at'] = now()->toDateString();
+                $meta['thesis_price'] = $asset->currentUnitPrice()
+                    ?? ($asset->relationLoaded('transactions') && $asset->averageBuyPrice() > 0
+                        ? $asset->averageBuyPrice()
+                        : null);
+                $asset->metadata = $meta;
+            }
+
+            if ($thesis === '' && $original !== '') {
+                unset($meta['thesis_recorded_at'], $meta['thesis_price']);
+                $asset->metadata = $meta;
+            }
+        });
+    }
+
     public function isPhysical(): bool
     {
         return in_array($this->type, self::PHYSICAL_TYPES, true);

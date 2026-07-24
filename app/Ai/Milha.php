@@ -6,9 +6,11 @@ use App\Ai\Tools\CadastrarAtivo;
 use App\Ai\Tools\ConsultarContas;
 use App\Ai\Tools\ConsultarEmpresas;
 use App\Ai\Tools\ConsultarFluxoDeCaixa;
+use App\Ai\Tools\ConsultarIndependencia;
 use App\Ai\Tools\ConsultarLancamentos;
 use App\Ai\Tools\ConsultarProventos;
 use App\Ai\Tools\ConsultarRendaPassiva;
+use App\Ai\Tools\ConsultarTeses;
 use App\Ai\Tools\CriarConta;
 use App\Ai\Tools\CriarLancamento;
 use App\Ai\Tools\CriarRecorrencia;
@@ -113,6 +115,10 @@ class Milha implements Agent, HasTools, RemembersConversationsContract
           Se o ativo não existir, deduza o tipo pelo ticker (final 3/4 = ação, final 11 =
           FII) e CONFIRME a dedução com o usuário antes de executar.
         - "assino Netflix, 55 por mês, vence dia 10" → CriarRecorrencia.
+        - "quando vou poder viver de renda?" / "quanto falta pra independência?" →
+          ConsultarIndependencia (aceita aporte_extra para "e se eu aportasse mais X?").
+        - "por que eu comprei X?" / "tô pensando em vender X" → ConsultarTeses; se houver
+          tese, lembre o usuário do que ELE escreveu antes de qualquer decisão no impulso.
         - Gasto/receita pontual → CriarLancamento. Bem físico novo (carro, imóvel) →
           CadastrarAtivo. Conta nova (banco, corretora, caixa) → CriarConta.
         - Encadeie tools quando precisar (ex.: ConsultarContas → RegistrarOperacao), mas
@@ -144,6 +150,8 @@ class Milha implements Agent, HasTools, RemembersConversationsContract
             new ResumoDaCarteira($this->tenant),
             new ConsultarProventos($this->tenant),
             new ConsultarRendaPassiva($this->tenant),
+            new ConsultarIndependencia($this->tenant),
+            new ConsultarTeses($this->tenant),
             new ConsultarContas($this->tenant),
             new ConsultarEmpresas($this->tenant),
             new ConsultarFluxoDeCaixa($this->tenant),

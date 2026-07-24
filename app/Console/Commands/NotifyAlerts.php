@@ -34,6 +34,7 @@ class NotifyAlerts extends Command
             $sent += $this->endingRecurrences($tenant, $alerts);
             $sent += $this->staleQuotes($tenant, $alerts);
             $sent += $this->negativeBalances($tenant, $alerts);
+            $sent += $this->thesisReviews($tenant, $alerts);
         }
 
         $this->info("{$sent} alerta(s) enviado(s).");
@@ -157,6 +158,54 @@ class NotifyAlerts extends Command
                 $body,
                 AssetResource::getUrl(parameters: ['tenant' => $tenant]),
             );
+        }
+
+        return $sent;
+    }
+
+    /** Queda relevante (%) desde o registro da tese que dispara a revisão. */
+    private const THESIS_DROP_THRESHOLD = -15.0;
+
+    /** Ativos com tese registrada cujo preço caiu forte desde então. */
+    private function thesisReviews(Tenant $tenant, AlertDispatcher $alerts): int
+    {
+        $sent = 0;
+
+        $assets = Asset::query()
+            ->where('tenant_id', $tenant->getKey())
+            ->wherePositionPositive()
+            ->get()
+            ->filter(fn (Asset $asset): bool => filled($asset->metadata['thesis'] ?? null)
+                && is_numeric($asset->metadata['thesis_price'] ?? null)
+                && (float) $asset->metadata['thesis_price'] > 0);
+
+        foreach ($assets as $asset) {
+            $price = $asset->currentUnitPrice();
+
+            if ($price === null) {
+                continue;
+            }
+
+            $change = ($price / (float) $asset->metadata['thesis_price'] - 1) * 100;
+
+            if ($change > self::THESIS_DROP_THRESHOLD) {
+                continue;
+            }
+
+            $excerpt = str((string) $asset->metadata['thesis'])->squish()->limit(140);
+            $title = "Revisite sua tese: {$asset->name}";
+            $body = 'O preço caiu '.number_format(abs($change), 1, ',', '.')
+                .'% desde que você registrou sua tese ("'.$excerpt.'"). '
+                .'Ela ainda vale? Se sim, firmeza no plano; se o cenário mudou, reavalie com calma.';
+
+            foreach ($tenant->users as $user) {
+                $sent += (int) $alerts->send(
+                    $user,
+                    $title,
+                    $body,
+                    AssetResource::getUrl('edit', ['record' => $asset, 'tenant' => $tenant]),
+                );
+            }
         }
 
         return $sent;
