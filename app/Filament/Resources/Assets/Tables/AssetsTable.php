@@ -5,12 +5,14 @@ namespace App\Filament\Resources\Assets\Tables;
 use App\Filament\Actions\ImportB3MovementAction;
 use App\Models\Asset;
 use App\Models\Company;
+use App\Models\Transaction;
 use App\Support\CompanyFilter;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Facades\Filament;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Columns\TextInputColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -50,6 +52,14 @@ class AssetsTable
                         default => 'gray',
                     })
                     ->sortable(),
+                TextColumn::make('fixed_income_class')
+                    ->label('Classe')
+                    ->badge()
+                    ->color('info')
+                    ->getStateUsing(fn (Asset $record): ?string => $record->fixedIncomeClass())
+                    ->formatStateUsing(fn (?string $state): string => Asset::FIXED_INCOME_CLASSES[$state] ?? '—')
+                    ->toggleable()
+                    ->visible(fn ($livewire): bool => ($livewire->activeTab ?? null) === 'fixed_income'),
                 TextColumn::make('rate_label')
                     ->label('Rentabilidade')
                     ->badge()
@@ -78,7 +88,9 @@ class AssetsTable
                     })
                     ->placeholder('—')
                     // Vencimento importa tanto para renda fixa quanto para opções.
-                    ->visible(fn ($livewire): bool => in_array($livewire->activeTab ?? null, ['fixed_income', 'option'], true)),
+                    ->visible(fn ($livewire): bool => in_array($livewire->activeTab ?? null, ['fixed_income', 'option'], true))
+                    // Datas ISO (YYYY-MM-DD) no JSON ordenam corretamente como texto.
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('metadata->due_date', $direction)),
                 TextColumn::make('depreciation_rate')
                     ->label('Depreciação')
                     ->badge()
@@ -245,6 +257,15 @@ class AssetsTable
                     ->formatStateUsing(fn (?float $state): string => self::formatPercent($state))
                     ->color(fn (?float $state): string => self::percentColor($state))
                     ->sortable(query: self::sortByComputed('percentChangeWithDividends')),
+                TextInputColumn::make('notes')
+                    ->label('Observações')
+                    ->getStateUsing(fn (Asset $record): ?string => $record->metadata['notes'] ?? null)
+                    ->updateStateUsing(function (Asset $record, ?string $state): void {
+                        $record->update([
+                            'metadata' => array_merge($record->metadata ?? [], ['notes' => $state]),
+                        ]);
+                    })
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('currency')
                     ->label('Moeda')
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -259,6 +280,54 @@ class AssetsTable
             ])
             ->defaultSort('name')
             ->filters([
+                SelectFilter::make('fixed_income_class')
+                    ->label('Classe do papel')
+                    ->options(Asset::FIXED_INCOME_CLASSES)
+                    ->visible(fn ($livewire): bool => ($livewire->activeTab ?? null) === 'fixed_income')
+                    // A classe pode vir do metadata ou ser inferida pelo nome, então
+                    // resolve em PHP (mesma lógica da coluna) e filtra pelos ids.
+                    ->query(function (Builder $query, array $data): Builder {
+                        $class = $data['value'] ?? null;
+
+                        if (blank($class)) {
+                            return $query;
+                        }
+
+                        $ids = (clone $query)
+                            ->reorder()
+                            ->where('type', 'FIXED_INCOME')
+                            ->get()
+                            ->filter(fn (Asset $asset): bool => $asset->fixedIncomeClass() === $class)
+                            ->modelKeys();
+
+                        return $query->whereIn('assets.id', $ids === [] ? [-1] : $ids);
+                    }),
+                SelectFilter::make('institution')
+                    ->label('Instituição')
+                    ->searchable()
+                    ->options(fn (): array => Transaction::query()
+                        ->where('tenant_id', Filament::getTenant()->getKey())
+                        ->whereNotNull('institution')
+                        ->where('institution', '!=', '')
+                        ->distinct()
+                        ->orderBy('institution')
+                        ->pluck('institution', 'institution')
+                        ->all())
+                    // Mesma regra da coluna: vale a instituição da movimentação mais recente.
+                    ->query(function (Builder $query, array $data): Builder {
+                        $institution = $data['value'] ?? null;
+
+                        if (blank($institution)) {
+                            return $query;
+                        }
+
+                        return $query->whereRaw(
+                            '(select transactions.institution from transactions
+                              where transactions.asset_id = assets.id and transactions.institution is not null
+                              order by transactions.transaction_date desc, transactions.id desc limit 1) = ?',
+                            [$institution],
+                        );
+                    }),
                 SelectFilter::make('company')
                     ->label('Empresa')
                     ->options(fn (): array => [CompanyFilter::NONE => '— Sem empresa (pessoal)']

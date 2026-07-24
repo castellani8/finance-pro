@@ -101,6 +101,13 @@ class AssetForm
                             ->placeholder('Ex: CDB123ABC45')
                             ->maxLength(50)
                             ->visible(fn (Get $get): bool => $get('type') === 'FIXED_INCOME'),
+                        Select::make('metadata.paper_type')
+                            ->label('Classe do papel')
+                            ->native(false)
+                            ->options(Asset::FIXED_INCOME_CLASSES)
+                            ->placeholder('Detectar pelo nome')
+                            ->helperText('Se vazio, detectamos pela sigla no início do nome (CDB, LCI, Tesouro...).')
+                            ->visible(fn (Get $get): bool => $get('type') === 'FIXED_INCOME'),
                         Select::make('currency')
                             ->label('Moeda')
                             ->helperText('Lance os valores na moeda do ativo; a exibição converte para BRL pelo câmbio PTAX da data.')

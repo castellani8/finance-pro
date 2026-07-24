@@ -824,6 +824,53 @@ class Asset extends Model
             : $this->purchaseValue($date);
     }
 
+    /** Rótulos das classes de papel de renda fixa, usados em formulário, coluna e filtro. */
+    public const FIXED_INCOME_CLASSES = [
+        'CDB' => 'CDB',
+        'LCI' => 'LCI',
+        'LCA' => 'LCA',
+        'LC' => 'LC',
+        'CRI' => 'CRI',
+        'CRA' => 'CRA',
+        'DEBENTURE' => 'Debênture',
+        'TESOURO' => 'Tesouro Direto',
+        'OUTRO' => 'Outro',
+    ];
+
+    /** Classe do papel de renda fixa (do metadata ou inferida pelo nome do título). */
+    public function fixedIncomeClass(): ?string
+    {
+        if ($this->type !== 'FIXED_INCOME') {
+            return null;
+        }
+
+        $stored = $this->metadata['paper_type'] ?? null;
+
+        if (is_string($stored) && array_key_exists($stored, self::FIXED_INCOME_CLASSES)) {
+            return $stored;
+        }
+
+        return static::inferFixedIncomeClass($this->name);
+    }
+
+    /** Heurística da classe do papel a partir da sigla no início do nome (CDB, LCI, Tesouro...). */
+    public static function inferFixedIncomeClass(?string $name): string
+    {
+        $normalized = Str::upper(Str::ascii(trim((string) $name)));
+
+        return match (true) {
+            Str::startsWith($normalized, 'CDB') => 'CDB',
+            Str::startsWith($normalized, 'LCI') => 'LCI',
+            Str::startsWith($normalized, 'LCA') => 'LCA',
+            Str::startsWith($normalized, ['LC ', 'LC-']) || $normalized === 'LC' => 'LC',
+            Str::startsWith($normalized, 'CRI') => 'CRI',
+            Str::startsWith($normalized, 'CRA') => 'CRA',
+            Str::startsWith($normalized, 'DEB') || Str::contains($normalized, 'DEBENTURE') => 'DEBENTURE',
+            Str::startsWith($normalized, ['TESOURO', 'LFT', 'LTN', 'NTN']) => 'TESOURO',
+            default => 'OUTRO',
+        };
+    }
+
     /** Indexador do título de renda fixa (do metadata ou inferido pelo tipo de papel). */
     public function indexer(): ?string
     {
