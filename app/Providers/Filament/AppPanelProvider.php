@@ -51,6 +51,13 @@ class AppPanelProvider extends PanelProvider
                 'primary' => Color::hex('#D4AF37'),
                 'gray' => Color::Zinc,
             ])
+            // Ordem dos grupos na barra lateral (Dashboard fica solto no topo).
+            ->navigationGroups([
+                'Carteira',
+                'Planejamento',
+                'Relatórios',
+                'Minha conta',
+            ])
             ->tenant(Tenant::class)
             ->tenantRegistration(RegisterTenant::class)
             ->renderHook(

@@ -27,6 +27,8 @@ class ContaResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedWallet;
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Carteira';
+
     protected static ?string $modelLabel = 'conta';
 
     protected static ?string $pluralModelLabel = 'contas';

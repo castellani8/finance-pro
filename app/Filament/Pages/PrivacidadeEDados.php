@@ -21,6 +21,8 @@ class PrivacidadeEDados extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedShieldCheck;
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Minha conta';
+
     protected static ?string $navigationLabel = 'Privacidade e dados';
 
     protected static ?string $title = 'Privacidade e dados';

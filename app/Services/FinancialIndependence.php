@@ -5,16 +5,20 @@ namespace App\Services;
 use App\Models\Account;
 use App\Models\Asset;
 use App\Models\Tenant;
+use Illuminate\Support\Carbon;
 
 /**
  * Projeção de independência financeira ("Viver de Renda"): a partir do
  * patrimônio atual, da renda passiva observada e do plano do tenant (custo de
- * vida, aporte mensal e retorno esperado), estima quando a renda passiva
- * projetada passa a cobrir o custo de vida.
+ * vida, aporte mensal, reajuste anual do aporte, retorno esperado e inflação
+ * média), estima quando a renda passiva projetada passa a cobrir o custo de
+ * vida — que também sobe com a inflação.
  *
- * Modelo assumido (simples de propósito): o patrimônio cresce ao retorno
- * esperado + aportes; a renda passiva projetada é o patrimônio vezes o yield
- * mensal observado da própria carteira (fallback: o retorno esperado).
+ * Modelo assumido (o mesmo de uma calculadora de juros compostos, com camada
+ * de aposentadoria por cima): o patrimônio rende ao retorno esperado e recebe
+ * aportes reajustados uma vez por ano; a renda passiva projetada é o
+ * patrimônio vezes o yield mensal observado da carteira (fallback: o retorno
+ * esperado); o custo de vida é corrigido pela inflação.
  */
 class FinancialIndependence
 {
@@ -26,51 +30,104 @@ class FinancialIndependence
     /**
      * @return array{
      *     configurado: bool, custo_mensal: ?float, aporte_mensal: float, retorno_anual: float,
+     *     reajuste_aporte_anual: float, inflacao_anual: float,
      *     patrimonio_atual: float, renda_media_mensal: float, cobertura_pct: ?float,
      *     patrimonio_alvo: ?float, meses_ate_independencia: ?int, data_independencia: ?string,
-     *     series: array{labels: array<int, string>, renda: array<int, float>, custo: array<int, float>, patrimonio: array<int, float>}
+     *     series: array{labels: array<int, string>, renda: array<int, float>, custo: array<int, float>, patrimonio: array<int, float>},
+     *     table_anual: array<int, array<string, mixed>>, table_mensal: array<int, array<string, mixed>>,
+     *     resumo: ?array{patrimonio: float, total_investido: float, total_juros: float, horizonte_anos: int}
      * }
      */
     public function build(Tenant $tenant, ?float $extraContribution = null): array
     {
         $custo = $tenant->independence_monthly_cost !== null ? (float) $tenant->independence_monthly_cost : null;
-        $aporte = max(0.0, (float) ($tenant->independence_monthly_contribution ?? 0) + (float) ($extraContribution ?? 0));
+        $aporteInicial = max(0.0, (float) ($tenant->independence_monthly_contribution ?? 0) + (float) ($extraContribution ?? 0));
         $retornoAnual = (float) ($tenant->independence_expected_return ?? 8.0);
+        $reajusteAnual = (float) ($tenant->independence_contribution_growth ?? 0.0);
+        $inflacaoAnual = (float) ($tenant->independence_inflation ?? 0.0);
 
-        $patrimonio = $this->currentNetWorth($tenant);
+        $patrimonioInicial = $this->currentNetWorth($tenant);
         $rendaMedia = $this->averagePassiveIncome($tenant);
 
-        // Taxa mensal equivalente ao retorno anual esperado.
+        // Taxas mensais equivalentes às anuais informadas.
         $crescimentoMensal = (1 + $retornoAnual / 100) ** (1 / 12) - 1;
+        $inflacaoMensal = (1 + $inflacaoAnual / 100) ** (1 / 12) - 1;
 
         // Yield observado da carteira; sem histórico, usa o retorno esperado.
-        $yieldMensal = ($patrimonio > 0 && $rendaMedia > 0)
-            ? $rendaMedia / $patrimonio
+        $yieldMensal = ($patrimonioInicial > 0 && $rendaMedia > 0)
+            ? $rendaMedia / $patrimonioInicial
             : $crescimentoMensal;
 
         $mesesAte = null;
         $labels = $renda = $custoSerie = $patrimonioSerie = [];
+        $tableAnual = $tableMensal = [];
+        $resumo = null;
 
         if ($custo !== null && $custo > 0 && $yieldMensal > 0) {
-            $pat = $patrimonio;
+            $pat = $patrimonioInicial;
+            $aporteMensal = $aporteInicial;
+            $custoCorrigido = $custo;
+            $aportadoAcumulado = 0.0;
+            $jurosAcumulados = 0.0;
+            $jurosNoAno = 0.0;
+            $inicio = now()->startOfMonth();
 
             for ($mes = 0; $mes <= self::MAX_MONTHS; $mes++) {
                 if ($mes > 0) {
-                    $pat = $pat * (1 + $crescimentoMensal) + $aporte;
+                    // O aporte é reajustado a cada aniversário do plano.
+                    if ($mes % 12 === 1 && $mes > 12) {
+                        $aporteMensal *= 1 + $reajusteAnual / 100;
+                    }
+
+                    $jurosDoMes = $pat * $crescimentoMensal;
+                    $pat += $jurosDoMes + $aporteMensal;
+                    $aportadoAcumulado += $aporteMensal;
+                    $jurosAcumulados += $jurosDoMes;
+                    $jurosNoAno += $jurosDoMes;
+                    $custoCorrigido *= 1 + $inflacaoMensal;
+
+                    $tableMensal[] = [
+                        'mes' => str(
+                            $inicio->copy()->addMonths($mes)->locale('pt_BR')->translatedFormat('M/Y')
+                        )->replace('.', '')->toString(),
+                        'aporte' => round($aporteMensal, 2),
+                        'juros' => round($jurosDoMes, 2),
+                        'total_investido' => round($patrimonioInicial + $aportadoAcumulado, 2),
+                        'total_juros' => round($jurosAcumulados, 2),
+                        'patrimonio' => round($pat, 2),
+                        'renda_mensal' => round($pat * $yieldMensal, 2),
+                        'cobertura_pct' => round($pat * $yieldMensal / $custoCorrigido * 100, 1),
+                    ];
                 }
 
                 $rendaProjetada = $pat * $yieldMensal;
 
-                if ($mesesAte === null && $rendaProjetada >= $custo) {
+                if ($mesesAte === null && $rendaProjetada >= $custoCorrigido) {
                     $mesesAte = $mes;
                 }
 
-                // Um ponto por ano no gráfico, do ano atual em diante.
+                // Um ponto por ano no gráfico e uma linha por ano na tabela.
                 if ($mes % 12 === 0) {
-                    $labels[] = (string) (now()->year + intdiv($mes, 12));
+                    $ano = now()->year + intdiv($mes, 12);
+
+                    $labels[] = (string) $ano;
                     $renda[] = round($rendaProjetada, 2);
-                    $custoSerie[] = round($custo, 2);
+                    $custoSerie[] = round($custoCorrigido, 2);
                     $patrimonioSerie[] = round($pat, 2);
+
+                    $tableAnual[] = [
+                        'ano' => $ano,
+                        'aporte_mensal' => round($aporteMensal, 2),
+                        'juros_no_ano' => round($jurosNoAno, 2),
+                        'total_investido' => round($patrimonioInicial + $aportadoAcumulado, 2),
+                        'total_juros' => round($jurosAcumulados, 2),
+                        'patrimonio' => round($pat, 2),
+                        'renda_mensal' => round($rendaProjetada, 2),
+                        'custo_mensal' => round($custoCorrigido, 2),
+                        'cobertura_pct' => round($rendaProjetada / $custoCorrigido * 100, 1),
+                    ];
+
+                    $jurosNoAno = 0.0;
                 }
 
                 // Depois do marco, mostra mais 2 anos e para (mínimo 10 anos de curva).
@@ -78,16 +135,26 @@ class FinancialIndependence
                     break;
                 }
             }
+
+            $resumo = [
+                'patrimonio' => round($pat, 2),
+                'total_investido' => round($patrimonioInicial + $aportadoAcumulado, 2),
+                'total_juros' => round($jurosAcumulados, 2),
+                'horizonte_anos' => intdiv(count($tableMensal), 12),
+            ];
         }
 
         return [
             'configurado' => $custo !== null && $custo > 0,
             'custo_mensal' => $custo,
-            'aporte_mensal' => $aporte,
+            'aporte_mensal' => $aporteInicial,
             'retorno_anual' => $retornoAnual,
-            'patrimonio_atual' => round($patrimonio, 2),
+            'reajuste_aporte_anual' => $reajusteAnual,
+            'inflacao_anual' => $inflacaoAnual,
+            'patrimonio_atual' => round($patrimonioInicial, 2),
             'renda_media_mensal' => round($rendaMedia, 2),
             'cobertura_pct' => ($custo !== null && $custo > 0) ? round($rendaMedia / $custo * 100, 1) : null,
+            // Em valores de hoje: quanto de patrimônio gera o custo de vida atual.
             'patrimonio_alvo' => ($custo !== null && $custo > 0 && $yieldMensal > 0) ? round($custo / $yieldMensal, 2) : null,
             'meses_ate_independencia' => $mesesAte,
             'data_independencia' => $mesesAte !== null
@@ -99,6 +166,9 @@ class FinancialIndependence
                 'custo' => $custoSerie,
                 'patrimonio' => $patrimonioSerie,
             ],
+            'table_anual' => $tableAnual,
+            'table_mensal' => $tableMensal,
+            'resumo' => $resumo,
         ];
     }
 

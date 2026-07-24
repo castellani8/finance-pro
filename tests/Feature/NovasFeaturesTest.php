@@ -68,6 +68,8 @@ class NovasFeaturesTest extends TestCase
             'independence_monthly_cost' => 1_400.00,
             'independence_monthly_contribution' => 2_000.00,
             'independence_expected_return' => 8.0,
+            'independence_contribution_growth' => 5.0,
+            'independence_inflation' => 4.0,
         ])->save();
 
         $data = app(FinancialIndependence::class)->build($this->tenant->fresh());
@@ -81,6 +83,20 @@ class NovasFeaturesTest extends TestCase
         // Aporte extra tem que encurtar (ou pelo menos não alongar) o caminho.
         $comExtra = app(FinancialIndependence::class)->build($this->tenant->fresh(), 3_000);
         $this->assertLessThanOrEqual($data['meses_ate_independencia'], $comExtra['meses_ate_independencia']);
+
+        // Tabelas estilo calculadora de juros compostos: anual e mensal.
+        $this->assertNotEmpty($data['table_anual']);
+        $this->assertNotEmpty($data['table_mensal']);
+        $this->assertSame(count($data['table_mensal']), ($data['resumo']['horizonte_anos'] * 12));
+
+        $primeiroAno = $data['table_anual'][1];
+        $this->assertGreaterThan(0, $primeiroAno['juros_no_ano']);
+        // Total investido = patrimônio inicial (100k) + 12 aportes de 2k.
+        $this->assertEqualsWithDelta(124_000.0, $primeiroAno['total_investido'], 1.0);
+        // Reajuste de 5%: aporte do 2º ano = 2.100.
+        $this->assertEqualsWithDelta(2_100.0, $data['table_anual'][2]['aporte_mensal'], 0.01);
+        // Inflação de 4% corrige o custo de vida no 1º ano.
+        $this->assertEqualsWithDelta(1_400 * 1.04, $primeiroAno['custo_mensal'], 1.0);
     }
 
     // ---- Agenda do Mês ---------------------------------------------------
@@ -102,27 +118,32 @@ class NovasFeaturesTest extends TestCase
         $rf = $this->makeAsset('CDB Teste', 'FIXED_INCOME', ['due_date' => '2026-07-28', 'indexer' => 'CDI']);
         $this->buy($rf, '2026-01-10', 5_000);
 
-        // FII pagou em 4 dos últimos meses → estimável.
+        // Despesa recorrente no dia 15 também entra.
+        RecurringTransaction::create([
+            'tenant_id' => $this->tenant->getKey(),
+            'type' => 'EXPENSE',
+            'description' => 'Contabilidade',
+            'amount' => 350,
+            'day_of_month' => 15,
+            'starts_on' => '2026-01-01',
+            'active' => true,
+        ]);
+
+        // Proventos NÃO entram na agenda: sem fonte oficial, seria chute.
         $fii = $this->makeAsset('FII Pagador', 'FII');
         $this->buy($fii, '2025-12-01', 10_000);
-
-        foreach (['2026-03-14', '2026-04-14', '2026-05-14', '2026-06-13'] as $date) {
-            $this->income($fii, 'INCOME', $date, 90);
-        }
+        $this->income($fii, 'INCOME', '2026-06-13', 90);
 
         $agenda = app(UpcomingEvents::class)->month($this->tenant, '2026-07');
         $kinds = array_column($agenda['events'], 'kind');
 
         $this->assertContains('receita', $kinds);
+        $this->assertContains('despesa', $kinds);
         $this->assertContains('vencimento', $kinds);
-        $this->assertContains('provento', $kinds);
+        $this->assertNotContains('provento', $kinds);
 
-        $provento = collect($agenda['events'])->firstWhere('kind', 'provento');
-        $this->assertTrue($provento['estimated']);
-        $this->assertEqualsWithDelta(90.0, $provento['amount'], 0.01);
-        $this->assertSame(14, $provento['day']);
-
-        $this->assertEqualsWithDelta(3_090.0, $agenda['totals']['a_receber'], 0.01);
+        $this->assertEqualsWithDelta(3_000.0, $agenda['totals']['a_receber'], 0.01);
+        $this->assertEqualsWithDelta(350.0, $agenda['totals']['a_pagar'], 0.01);
     }
 
     // ---- Diário de Tese --------------------------------------------------

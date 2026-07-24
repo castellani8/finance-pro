@@ -20,6 +20,8 @@ class Familia extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUserGroup;
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Minha conta';
+
     protected static ?string $navigationLabel = 'Família';
 
     protected static ?string $title = 'Família e sucessão';

@@ -29,6 +29,8 @@ class AuditoriaResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClipboardDocumentList;
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Minha conta';
+
     protected static ?string $modelLabel = 'registro';
 
     protected static ?string $pluralModelLabel = 'auditoria';

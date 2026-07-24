@@ -162,6 +162,7 @@ class PanelRenderSweepTest extends TestCase
             MonthlyIncomeChart::class,
             AllocationChart::class,
             CashFlowChart::class,
+            \App\Filament\Widgets\CashFlowTable::class,
             Onboarding::class,
             PassiveIncomeStats::class,
             PassiveIncomeChart::class,

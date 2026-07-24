@@ -16,6 +16,8 @@ class AgendaDoMes extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Planejamento';
+
     protected static ?string $navigationLabel = 'Agenda do Mês';
 
     protected static ?string $title = 'Agenda do Mês';

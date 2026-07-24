@@ -16,6 +16,8 @@ class RelatorioIr extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentText;
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Relatórios';
+
     protected static ?string $navigationLabel = 'Relatório IR';
 
     protected static ?string $title = 'Relatório para Imposto de Renda';

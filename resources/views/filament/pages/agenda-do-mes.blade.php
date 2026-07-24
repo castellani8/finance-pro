@@ -19,7 +19,6 @@
         .ag-event .ag-detail { font-size: .75rem; opacity: .6; }
         .ag-amount { font-weight: 700; font-size: .875rem; white-space: nowrap; }
         .ag-badge { font-size: .65rem; border-radius: 999px; padding: .1rem .5rem; margin-left: .4rem; vertical-align: middle; }
-        .ag-provento { background: rgba(212,175,55,.15); color: #B18F27; }
         .ag-receita { background: rgba(34,197,94,.15); color: #16a34a; }
         .ag-despesa { background: rgba(239,68,68,.15); color: #ef4444; }
         .ag-vencimento { background: rgba(59,130,246,.15); color: #3b82f6; }
@@ -51,11 +50,12 @@
     </div>
 
     <x-filament::section heading="Linha do tempo"
-        description="Recorrências e vencimentos são contratuais; proventos são estimados pelo histórico de pagamento de cada ativo.">
+        description="Só o que é contratual: recorrências cadastradas e vencimentos de renda fixa. Proventos aparecem em Proventos quando caem de verdade.">
         @if ($agenda['events'] === [])
             <p style="font-size:.875rem; opacity:.6; padding:.5rem 0;">
                 Nenhum evento previsto para este mês. Cadastre recorrências (aluguéis,
-                assinaturas) e mantenha os proventos importados para a agenda ganhar vida.
+                assinaturas) e informe o vencimento dos títulos de renda fixa para a
+                agenda ganhar vida.
             </p>
         @else
             @foreach (collect($agenda['events'])->groupBy('day') as $day => $events)
@@ -70,14 +70,14 @@
                                 <div>
                                     <span class="ag-label">{{ $event['label'] }}</span>
                                     <span class="ag-badge ag-{{ $event['kind'] }}">
-                                        {{ ['provento' => 'Provento', 'receita' => 'Receita', 'despesa' => 'Despesa', 'vencimento' => 'Vencimento'][$event['kind']] }}{{ $event['estimated'] ? ' · estimado' : '' }}
+                                        {{ ['receita' => 'Receita', 'despesa' => 'Despesa', 'vencimento' => 'Vencimento'][$event['kind']] }}
                                     </span>
                                     @if ($event['detail'])
                                         <div class="ag-detail">{{ $event['detail'] }}</div>
                                     @endif
                                 </div>
                                 <span class="ag-amount" style="color: {{ $event['kind'] === 'despesa' ? '#ef4444' : '#16a34a' }}">
-                                    {{ $event['kind'] === 'despesa' ? '−' : '+' }}{{ $money((float) $event['amount']) }}{{ $event['estimated'] ? ' ~' : '' }}
+                                    {{ $event['kind'] === 'despesa' ? '−' : '+' }}{{ $money((float) $event['amount']) }}
                                 </span>
                             </div>
                         @endforeach

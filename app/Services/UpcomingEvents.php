@@ -8,19 +8,13 @@ use App\Models\Tenant;
 use Illuminate\Support\Carbon;
 
 /**
- * Agenda financeira do mês: junta o que é contratual (recorrências e
- * vencimentos de renda fixa) com o que dá para estimar do histórico
- * (proventos de pagadores regulares, tipo FIIs). Estimativas são sempre
- * marcadas como tal — a Milia não inventa certeza que não tem.
+ * Agenda financeira do mês: só o que é contratual — recorrências (aluguéis,
+ * assinaturas) e vencimentos de renda fixa. Proventos ficam de fora de
+ * propósito: sem fonte oficial de anúncios, seria chute — e a Milia não
+ * inventa certeza que não tem.
  */
 class UpcomingEvents
 {
-    /** Meses de histórico analisados para estimar proventos recorrentes. */
-    private const LOOKBACK_MONTHS = 6;
-
-    /** Mínimo de meses com pagamento no período para considerar o ativo um pagador regular. */
-    private const MIN_PAYING_MONTHS = 3;
-
     /**
      * @return array{
      *     events: array<int, array{date: string, day: int, kind: string, label: string, detail: ?string, amount: ?float, estimated: bool}>,
@@ -35,7 +29,6 @@ class UpcomingEvents
         $events = [
             ...$this->recurrences($tenant, $start, $end),
             ...$this->fixedIncomeMaturities($tenant, $start, $end),
-            ...$this->estimatedDividends($tenant, $start, $end),
         ];
 
         usort($events, fn (array $a, array $b): int => [$a['date'], $a['label']] <=> [$b['date'], $b['label']]);
@@ -48,7 +41,7 @@ class UpcomingEvents
         return [
             'events' => $events,
             'totals' => [
-                'a_receber' => $sum('receita', 'provento'),
+                'a_receber' => $sum('receita'),
                 'a_pagar' => $sum('despesa'),
                 'vencendo' => $sum('vencimento'),
             ],
@@ -110,74 +103,5 @@ class UpcomingEvents
             'amount' => round($asset->currentValue(), 2),
             'estimated' => false,
         ])->values()->all();
-    }
-
-    /**
-     * Proventos estimados: ativos que pagaram em pelo menos 3 dos últimos 6
-     * meses viram uma previsão (mediana dos valores, dia típico de pagamento).
-     */
-    private function estimatedDividends(Tenant $tenant, Carbon $start, Carbon $end): array
-    {
-        $lookbackStart = $start->copy()->subMonthsNoOverflow(self::LOOKBACK_MONTHS)->startOfMonth();
-
-        $rows = $tenant->transactions()
-            ->whereIn('type', Asset::CASH_INCOME_TYPES)
-            ->whereNotNull('asset_id')
-            ->whereDate('transaction_date', '>=', $lookbackStart->toDateString())
-            ->whereDate('transaction_date', '<', $start->toDateString())
-            ->with('asset')
-            ->get();
-
-        $events = [];
-
-        foreach ($rows->groupBy('asset_id') as $transactions) {
-            $asset = $transactions->first()->asset;
-
-            if ($asset === null) {
-                continue;
-            }
-
-            $byMonth = $transactions->groupBy(
-                fn ($t): string => substr((string) $t->getRawOriginal('transaction_date'), 0, 7)
-            );
-
-            if ($byMonth->count() < self::MIN_PAYING_MONTHS) {
-                continue;
-            }
-
-            // Mediana dos totais mensais (sinal do fluxo trata estornos).
-            $monthlyTotals = $byMonth
-                ->map(fn ($group): float => (float) $group->sum(
-                    fn ($t): float => $t->flowDirection()->sign() * (float) $t->total_amount
-                ))
-                ->filter(fn (float $v): bool => $v > 0)
-                ->sort()
-                ->values();
-
-            if ($monthlyTotals->isEmpty()) {
-                continue;
-            }
-
-            $estimate = $monthlyTotals[intdiv($monthlyTotals->count() - 1, 2)];
-
-            // Dia típico de pagamento (mediana), limitado ao tamanho do mês.
-            $days = $transactions
-                ->map(fn ($t): int => (int) substr((string) $t->getRawOriginal('transaction_date'), 8, 2))
-                ->sort()
-                ->values();
-            $day = min($days[intdiv($days->count() - 1, 2)], $start->daysInMonth);
-
-            $events[] = [
-                'date' => $start->copy()->day($day)->toDateString(),
-                'day' => $day,
-                'kind' => 'provento',
-                'label' => $asset->name,
-                'detail' => 'Provento estimado pela média dos últimos meses',
-                'amount' => round($estimate, 2),
-                'estimated' => true,
-            ];
-        }
-
-        return $events;
     }
 }

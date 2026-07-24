@@ -32,6 +32,8 @@ class ProventoResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Carteira';
+
     protected static ?string $modelLabel = 'provento';
 
     protected static ?string $pluralModelLabel = 'proventos';

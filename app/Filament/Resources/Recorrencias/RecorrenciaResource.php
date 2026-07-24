@@ -36,6 +36,8 @@ class RecorrenciaResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowPathRoundedSquare;
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Carteira';
+
     protected static ?string $modelLabel = 'recorrência';
 
     protected static ?string $pluralModelLabel = 'recorrências';

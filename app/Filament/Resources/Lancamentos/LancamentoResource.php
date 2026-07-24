@@ -32,6 +32,8 @@ class LancamentoResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowsRightLeft;
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Carteira';
+
     protected static ?string $modelLabel = 'lançamento';
 
     protected static ?string $pluralModelLabel = 'lançamentos';

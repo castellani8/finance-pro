@@ -16,6 +16,8 @@ class Retrospectiva extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedSparkles;
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Relatórios';
+
     protected static ?string $navigationLabel = 'Retrospectiva';
 
     protected static ?string $title = 'Retrospectiva do ano';

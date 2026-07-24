@@ -31,6 +31,8 @@ class Assinatura extends Page
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCreditCard;
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Minha conta';
+
     protected static ?string $navigationLabel = 'Assinatura';
 
     protected static ?string $title = 'Assinatura';

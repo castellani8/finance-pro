@@ -24,6 +24,8 @@ class CompanyResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingOffice2;
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Carteira';
+
     protected static ?string $modelLabel = 'empresa';
 
     protected static ?string $pluralModelLabel = 'empresas';
