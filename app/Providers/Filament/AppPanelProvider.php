@@ -37,6 +37,7 @@ class AppPanelProvider extends PanelProvider
             ->path('app')
             ->login()
             ->registration(Register::class)
+            ->passwordReset()
             ->emailVerification()
             // isSimple: false renderiza o perfil como página completa do
             // painel (com sidebar), em vez do modal simples padrão.
@@ -82,6 +83,7 @@ class AppPanelProvider extends PanelProvider
             ->widgets([
                 AccountWidget::class,
             ])
+            ->spa()
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
